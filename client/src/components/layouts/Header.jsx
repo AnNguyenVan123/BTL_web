@@ -7,37 +7,50 @@ import {
   VideoCameraAddOutlined,
   UserOutlined,
 } from "@ant-design/icons";
-import { Avatar, Dropdown } from "antd";
-
+import { Avatar, Dropdown, Button } from "antd";
 import { Logo } from "./Logo";
+import { Link } from "react-router-dom";
 
 export default function Header() {
-  const items = [
-    {
-      key: "1",
-      label: "My Account",
-      disabled: true,
-    },
-    {
-      type: "divider",
-    },
-    {
-      key: "2",
-      label: "Profile",
-      extra: "⌘P",
-    },
-    {
-      key: "3",
-      label: "Change Password",
-      extra: "⌘CP",
-    },
-  ];
+  const user = null; // Placeholder for user state
+
+  const items = user
+    ? [
+      {
+        key: "1",
+        label: "My Account",
+        disabled: true,
+      },
+      {
+        type: "divider",
+      },
+      {
+        key: "2",
+        label: "Profile",
+        extra: "⌘P",
+      },
+      {
+        key: "3",
+        label: "Change Password",
+        extra: "⌘CP",
+      },
+    ]
+    : [
+      {
+        key: "1",
+        label: <Link to="/login">
+          Log in
+        </Link>, // thêm href login
+      },
+    ];
 
   const onClick = ({ key }) => {
     console.log(key);
   };
+
   return (
     <header className="pt-6 pb-2 grid grid-cols-3">
+      {/* Logo + Search */}
       <div className="flex items-center">
         <div>
           <a
@@ -51,9 +64,16 @@ export default function Header() {
           <span className="absolute mt-2 ml-2">
             <SearchOutlined style={{ fontSize: "24px" }} />
           </span>
-          <input type="text" placeholder="Search" id="header-search" />
+          <input
+            type="text"
+            placeholder="Search"
+            id="header-search"
+            className="pl-10 pr-4 py-2 border rounded-md focus:outline-none"
+          />
         </div>
       </div>
+
+      {/* Middle features */}
       <div
         id="header-features"
         className="flex gap-8 max-w-[384px] place-self-center cursor-pointer"
@@ -75,13 +95,27 @@ export default function Header() {
           <p>Lenses</p>
         </div>
       </div>
+
+      {/* User section */}
       <div className="place-self-end self-center pr-10">
-        <Dropdown menu={{ items, onClick }}>
-          <a href="" onClick={(e) => e.preventDefault()}>
-            <Avatar size="large" icon={<UserOutlined />} />
-          </a>
-        </Dropdown>
+        {user ? (
+          <Dropdown menu={{ items, onClick }}>
+            <a href="#" onClick={(e) => e.preventDefault()}>
+              <Avatar size="large" icon={<UserOutlined />} />
+            </a>
+          </Dropdown>
+        ) : (
+          <Button
+            type="primary"
+            href="/login"
+            className="bg-yellow-400 text-black font-semibold rounded-lg px-5 py-2 hover:bg-yellow-300"
+          >
+            Login
+          </Button>
+        )}
       </div>
     </header>
   );
 }
+
+
