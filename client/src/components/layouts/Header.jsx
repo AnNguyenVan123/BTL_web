@@ -6,46 +6,70 @@ import {
   MessageOutlined,
   VideoCameraAddOutlined,
   UserOutlined,
+  LogoutOutlined,
+  SettingOutlined,
+  ProfileOutlined,
 } from "@ant-design/icons";
 import { Avatar, Dropdown, Button } from "antd";
 import { Logo } from "./Logo";
 import { Link } from "react-router-dom";
+import { useAuth } from "../../context/AuthContext.jsx";
 
 export default function Header() {
-  const user = null; // Placeholder for user state
+  const { user, logout } = useAuth();
 
+  // Nếu có user → tạo menu đầy đủ
   const items = user
     ? [
       {
-        key: "1",
-        label: "My Account",
+        key: "profile",
+        label: (
+          <div className="flex items-center gap-3 px-2 py-1">
+            <Avatar
+              size="small"
+              src={user.photoURL}
+              icon={<UserOutlined />}
+            />
+            <div>
+              <p className="font-semibold">
+                {user.displayName || user.email}
+              </p>
+              <p className="text-xs text-gray-500">My Account</p>
+            </div>
+          </div>
+        ),
         disabled: true,
       },
+      { type: "divider" },
       {
-        type: "divider",
+        key: "profile-link",
+        icon: <ProfileOutlined />,
+        label: <Link to="/profile">View Profile</Link>,
       },
       {
-        key: "2",
-        label: "Profile",
-        extra: "⌘P",
+        key: "settings",
+        icon: <SettingOutlined />,
+        label: <Link to="/settings">Settings</Link>,
       },
+      { type: "divider" },
       {
-        key: "3",
-        label: "Change Password",
-        extra: "⌘CP",
+        key: "logout",
+        icon: <LogoutOutlined />,
+        label: "Log out",
+        danger: true,
       },
     ]
     : [
       {
-        key: "1",
-        label: <Link to="/login">
-          Log in
-        </Link>, // thêm href login
+        key: "login",
+        label: <Link to="/login">Log in</Link>,
       },
     ];
 
-  const onClick = ({ key }) => {
-    console.log(key);
+  const onClick = async ({ key }) => {
+    if (key === "logout") {
+      await logout();
+    }
   };
 
   return (
@@ -99,9 +123,18 @@ export default function Header() {
       {/* User section */}
       <div className="place-self-end self-center pr-10">
         {user ? (
-          <Dropdown menu={{ items, onClick }}>
+          <Dropdown menu={{ items, onClick }} trigger={["click"]}>
             <a href="#" onClick={(e) => e.preventDefault()}>
-              <Avatar size="large" icon={<UserOutlined />} />
+              <div className="flex items-center gap-2">
+                <Avatar
+                  size="large"
+                  src={user.photoURL}
+                  icon={<UserOutlined />}
+                />
+                <span className="font-medium">
+                  {user.displayName || user.email}
+                </span>
+              </div>
             </a>
           </Dropdown>
         ) : (

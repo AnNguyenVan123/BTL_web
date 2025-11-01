@@ -3,6 +3,8 @@ import React from "react"
 import DefaultLayout from "../layouts/default"
 import Login from "../pages/Login";
 import SignupPage from "../pages/SignUp";
+import ProfilePage from "../pages/Profile";
+import SettingsPage from "../pages/Settings";
 const routes = [
   {
     path: "/",
@@ -18,6 +20,14 @@ const routes = [
   {
     path: "/signup",
     element: React.createElement(SignupPage),
+  },
+   {
+    path: "/profile",
+    element: React.createElement(ProfilePage),
+  },
+   {
+    path: "/settings",
+    element: React.createElement(SettingsPage),
   },
 ];
 export default function AllRoutes() {
