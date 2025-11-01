@@ -1,48 +1,79 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from "react-router-dom";
 import { motion } from 'framer-motion';
-
+import { auth, googleProvider } from "../firebase";
+import { useAuth } from '../context/AuthContext';
+import { sendPasswordResetEmail } from "firebase/auth";
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const navigate = useNavigate();
-
-  useEffect(() => {
-    // giả lập: onAuthStateChanged(auth, (u) => setUser(u));
-  }, []);
-
-  const handleBack = () => navigate("/"); // 👈 nút quay lại
-
-  async function handleGoogleSignIn() {
-    setError('');
+  const { user, setUser, loginWithEmail, loginWithGoogle, signOut } = useAuth();
+  const handleBack = () => navigate("/");
+  async function handleForgotPassword() {
+    if (!email) {
+      setError("Please enter your email first");
+      return;
+    }
+    setError("");
     setLoading(true);
     try {
-      // await signInWithPopup(auth, googleProvider);
+      await sendPasswordResetEmail(auth, email);
+      setError("Password reset email sent! Check your inbox.");
     } catch (err) {
-      setError(err.message || 'Google sign-in failed');
+      setError(err.message || "Failed to send reset email");
+    } finally {
+      setLoading(false);
+    }
+  }
+  // ✅ Đăng nhập Google
+  async function handleGoogleSignIn() {
+    setError("");
+    setLoading(true);
+    try {
+      await loginWithGoogle();
+      navigate("/");
+    } catch (err) {
+      setError(err.message || "Google login failed");
     } finally {
       setLoading(false);
     }
   }
 
+  // ✅ Đăng nhập Email
+  async function handleEmailSignIn(e) {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
+    try {
+      await loginWithEmail(email, password);
+      navigate("/");
+    } catch (err) {
+      setError(err.message || "Login failed");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // ✅ Chuyển qua trang tạo tài khoản
   async function handleEmailSignUp(e) {
     e.preventDefault();
     navigate("/signup");
   }
 
-  async function handleEmailSignIn(e) {
-    e.preventDefault();
+  // ✅ Đăng xuất
+  async function handleSignOut() {
+    await signOut(auth);
   }
 
   const GoogleIcon = () => (
     <svg width="20" height="20" viewBox="0 0 533.5 544.3" xmlns="http://www.w3.org/2000/svg" aria-hidden>
-      <path fill="#4285F4" d="M533.5 278.4c0-18.8-1.6-37.1-4.7-54.7H272v103.6h146.9c-6.3 34.1-25 62.9-53.4 82v68.2h86.3c50.5-46.6 81.7-115.2 81.7-199z"/>
-      <path fill="#34A853" d="M272 544.3c72.9 0 134-24.1 178.7-65.4l-86.3-68.2c-24 16.1-54.6 25.6-92.4 25.6-71 0-131.3-47.8-152.8-112.1H34.2v70.8c44.8 88.7 138.4 149.3 237.8 149.3z"/>
-      <path fill="#FBBC05" d="M119.2 322.4c-10.6-31.6-10.6-65.7 0-97.3V154.3H34.2c-39.4 78.9-39.4 171 0 249.9l85-81.8z"/>
-      <path fill="#EA4335" d="M272 107.7c39.6 0 75.3 13.6 103.5 40.4l77.6-77.6C396.3 24.6 335.2 0 272 0 172.6 0 79 60.6 34.2 149.3l85 70.8C140.7 155.5 201 107.7 272 107.7z"/>
+      <path fill="#4285F4" d="M533.5 278.4c0-18.8-1.6-37.1-4.7-54.7H272v103.6h146.9c-6.3 34.1-25 62.9-53.4 82v68.2h86.3c50.5-46.6 81.7-115.2 81.7-199z" />
+      <path fill="#34A853" d="M272 544.3c72.9 0 134-24.1 178.7-65.4l-86.3-68.2c-24 16.1-54.6 25.6-92.4 25.6-71 0-131.3-47.8-152.8-112.1H34.2v70.8c44.8 88.7 138.4 149.3 237.8 149.3z" />
+      <path fill="#FBBC05" d="M119.2 322.4c-10.6-31.6-10.6-65.7 0-97.3V154.3H34.2c-39.4 78.9-39.4 171 0 249.9l85-81.8z" />
+      <path fill="#EA4335" d="M272 107.7c39.6 0 75.3 13.6 103.5 40.4l77.6-77.6C396.3 24.6 335.2 0 272 0 172.6 0 79 60.6 34.2 149.3l85 70.8C140.7 155.5 201 107.7 272 107.7z" />
     </svg>
   );
 
@@ -54,7 +85,6 @@ export default function LoginPage() {
         transition={{ duration: 0.45 }}
         className="relative max-w-md w-full bg-white/90 backdrop-blur-md rounded-2xl shadow-xl p-8 border border-slate-200"
       >
-        {/* 🔙 Nút Back ở góc trên trái */}
         <button
           onClick={handleBack}
           className="absolute top-4 left-4 text-slate-500 hover:text-slate-700 transition"
@@ -110,6 +140,16 @@ export default function LoginPage() {
               </label>
 
               {error && <div className="text-sm text-red-600">{error}</div>}
+              <div className="flex justify-end text-sm mt-1">
+                <button
+                  type="button"
+                  onClick={handleForgotPassword}
+                  className="text-indigo-600 hover:underline"
+                  disabled={loading}
+                >
+                  Forgot password?
+                </button>
+              </div>
 
               <div className="flex gap-3">
                 <button
@@ -141,7 +181,7 @@ export default function LoginPage() {
               <div className="text-sm text-slate-500">{user.email}</div>
             </div>
             <div className="flex gap-3">
-              <button onClick={() => {}} className="px-4 py-2 rounded-md border">Sign out</button>
+              <button onClick={handleSignOut} className="px-4 py-2 rounded-md border">Sign out</button>
             </div>
           </div>
         )}
@@ -153,3 +193,5 @@ export default function LoginPage() {
     </div>
   );
 }
+
+
