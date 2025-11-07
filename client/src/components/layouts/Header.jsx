@@ -1,4 +1,5 @@
 import "../../styles/layout.css";
+import React, { useEffect, useState } from "react";
 import {
   SearchOutlined,
   PlayCircleOutlined,
@@ -9,6 +10,8 @@ import {
   LogoutOutlined,
   SettingOutlined,
   ProfileOutlined,
+  SunOutlined,
+  MoonOutlined,
 } from "@ant-design/icons";
 import { Avatar, Dropdown, Button } from "antd";
 import { Logo } from "./Logo";
@@ -17,6 +20,22 @@ import { useAuth } from "../../context/AuthContext.jsx";
 
 export default function Header() {
   const { user, logout } = useAuth();
+  const [theme, setTheme] = useState(() =>
+    typeof window !== "undefined" ? localStorage.getItem("theme") || "light" : "light"
+  );
+
+  useEffect(() => {
+    if (typeof document !== "undefined") {
+      if (theme === "dark") {
+        document.documentElement.classList.add("dark");
+      } else {
+        document.documentElement.classList.remove("dark");
+      }
+      try {
+        localStorage.setItem("theme", theme);
+      } catch (e) {}
+    }
+  }, [theme]);
 
   // Nếu có user → tạo menu đầy đủ
   const items = user
@@ -123,7 +142,20 @@ export default function Header() {
       </div>
 
       {/* User section */}
-      <div className="place-self-end self-center pr-10">
+      <div className="place-self-end self-center pr-10 flex items-center gap-4">
+        <button
+          onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
+          aria-label="Toggle theme"
+          className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700"
+          title="Toggle light/dark"
+        >
+          {theme === "dark" ? (
+            <SunOutlined style={{ fontSize: 18 }} />
+          ) : (
+            <MoonOutlined style={{ fontSize: 18 }} />
+          )}
+        </button>
+
         {user ? (
           <Dropdown menu={{ items, onClick }} trigger={["click"]}>
             <a href="#" onClick={(e) => e.preventDefault()}>
