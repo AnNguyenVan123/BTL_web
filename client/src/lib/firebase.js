@@ -2,6 +2,7 @@ import { initializeApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 import { getAnalytics, isSupported } from "firebase/analytics";
+import { getStorage } from "firebase/storage";
 
 // Cấu hình Firebase
 const firebaseConfig = {
@@ -14,22 +15,22 @@ const firebaseConfig = {
   measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
 };
 
-
 // Khởi tạo Firebase
 const app = initializeApp(firebaseConfig);
 
-// ✅ Khởi tạo Firestore
+// Khởi tạo Firestore
 const db = getFirestore(app);
 
-// ✅ Khởi tạo Auth
+// Khởi tạo Auth
 const auth = getAuth(app);
 const googleProvider = new GoogleAuthProvider();
+const storage = getStorage();
 
-// ⚙️ Analytics (chỉ chạy khi môi trường hỗ trợ)
+// Analytics (chỉ chạy khi môi trường hỗ trợ)
 isSupported().then((supported) => {
   if (supported) {
     getAnalytics(app);
   }
 });
 
-export { auth, googleProvider, db };
+export { auth, googleProvider, db, storage };
