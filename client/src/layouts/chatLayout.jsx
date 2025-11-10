@@ -9,8 +9,22 @@ import SideBar from "../components/pages/chat/sidebar/SideBar";
 
 export default function ChatLayout() {
   const [close, setClose] = useState(true);
+  const [toggleAddUser, setToggleAddUser] = useState(false);
+  const [selectedChatId, setSelectedChatId] = useState(null);
+  const [receiver, setReceiver] = useState(null);
   return (
-    <ChatContext.Provider value={{ close, setClose }}>
+    <ChatContext.Provider
+      value={{
+        close,
+        setClose,
+        toggleAddUser,
+        setToggleAddUser,
+        selectedChatId,
+        setSelectedChatId,
+        receiver,
+        setReceiver,
+      }}
+    >
       <div className="h-screen grid grid-cols-[340px_1fr]">
         <SideBar />
         {close ? (
