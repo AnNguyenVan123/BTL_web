@@ -2,30 +2,65 @@ import React, { useRef, useState } from "react";
 import CameraStream from "../components/CameraStream";
 import AIFilterCanvas from "../components/AIFilterCanvas";
 import FilterSelector from "../components/FilterSelector";
-import MultiStickerSelector from "../components/MultiStickerSelector";
+import StickerSelector from "../components/StickerSelector";
 import SnapshotVideo from "../components/SnapshotVideo";
+import AdjustmentControls from "../components/AdjustmentControl";
 
 const Home = () => {
   const videoRef = useRef(null);
-  const canvasRef = useRef(null);
+  const canvasRef = useRef(null); 
   const [filter, setFilter] = useState("none");
   const [stickers, setStickers] = useState([]);
+  
+  // New State variables
+  const [brightness, setBrightness] = useState(100); // 100% is neutral
+  const [contrast, setContrast] = useState(100);   // 100% is neutral
+  const [blending, setBlending] = useState(1.0);    // 1.0 (100%) is no trail / full opacity
 
   return (
-    <div style={{ display: "flex", flexDirection: "row", alignItems: "center", padding: 20 }}>
-      <h1>AI Snapchat Web Prototype (Full Feature)</h1>
+    <div className="flex flex-col p-5 items-center bg-gray-50 min-h-screen">
+
+      {/* Hidden camera stream */}
       <CameraStream videoRef={videoRef} />
-      <AIFilterCanvas videoRef={videoRef} filter={filter} stickers={stickers} ref={canvasRef} />
-      <div style={{ display: "flex", gap: 20, marginTop: 10, flexWrap: "wrap" }}>
-        <FilterSelector setFilter={setFilter} />
-        <MultiStickerSelector stickers={stickers} setStickers={setStickers} />
+
+      {/* Main Content Area: Canvas and Controls */}
+      <div className="flex flex-col lg:flex-row gap-8 w-full max-w-6xl">
+
+        {/* 1. Canvas and Snapshot Controls */}
+        <div className="flex-grow flex flex-col items-center">
+          <AIFilterCanvas
+            videoRef={videoRef}
+            filter={filter}
+            stickers={stickers}
+            // Pass the new adjustment state down to the canvas
+            brightness={brightness}
+            contrast={contrast}
+            blending={blending}
+            ref={canvasRef} 
+          />
+          <SnapshotVideo canvasRef={canvasRef} />
+        </div>
+
+        {/* 2. Side Panel/Control Selectors */}
+        <div className="flex flex-col gap-6 w-full lg:w-80">
+          <FilterSelector setFilter={setFilter} currentFilter={filter} />
+          
+          <AdjustmentControls
+            brightness={brightness}
+            setBrightness={setBrightness}
+            contrast={contrast}
+            setContrast={setContrast}
+            blending={blending}
+            setBlending={setBlending}
+          />
+          
+          <StickerSelector setStickers={setStickers} />
+        </div>
       </div>
-      <SnapshotVideo canvasRef={canvasRef} />
     </div>
   );
 };
 
 export default Home;
-
 
 

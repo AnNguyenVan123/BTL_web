@@ -1,38 +1,58 @@
 import React from "react";
-import glasses from "../assets/glasses.png";
-import crown from "../assets/crown.png";
-import mustache from "../assets/mustache.png";
 
-const MultiStickerSelector = ({ stickers, setStickers }) => {
-  const availableStickers = [
-    { name: "Glasses", src: glasses },
-    { name: "Crown", src: crown },
-    { name: "Mustache", src: mustache },
-  ];
+const stickersList = [
+  { src: "src/assets/glasses.png", name: "Glasses" },
+  { src: "src/assets/crown.png", name: "Crown" },
+  { src: "src/assets/mustache.png", name: "Mustache" }
+];
 
-  const toggleSticker = (sticker) => {
-    const exists = stickers.find((s) => s.src === sticker.src);
-    if (exists) {
-      setStickers(stickers.filter((s) => s.src !== sticker.src));
-    } else {
-      setStickers([...stickers, { ...sticker }]);
-    }
+// Assuming the Home component uses a function to update the list of active stickers
+// For simplicity, this version just adds the selected sticker to the list.
+const StickerSelector = ({ setStickers }) => {
+  
+  const handleAddSticker = (src) => {
+    // Add the new sticker to the list. The x/y/width/height are handled by AIFilterCanvas landmark logic
+    setStickers(prevStickers => {
+        // Prevent adding the same sticker multiple times, if desired
+        if (prevStickers.some(s => s.src === src)) return prevStickers;
+        return [...prevStickers, { src }];
+    });
   };
+  
+  // Note: A button to clear stickers might be useful, but is omitted for brevity.
 
   return (
-    <div style={{ display: "flex", gap: 10 }}>
-      {availableStickers.map((s) => (
-        <img
-          key={s.name}
-          src={s.src}
-          alt={s.name}
-          width={50}
-          style={{ cursor: "pointer", border: stickers.find((st) => st.src === s.src) ? "2px solid blue" : "none" }}
-          onClick={() => toggleSticker(s)}
-        />
-      ))}
+    <div className="p-4 bg-white rounded-xl shadow-md border border-gray-100">
+      <h4 className="text-lg font-bold mb-4 text-gray-800 border-b pb-2">✨ Add Stickers</h4>
+      
+      <div className="grid grid-cols-3 gap-4 justify-items-center">
+        {stickersList.map((sticker, i) => (
+          <div 
+            key={i}
+            className="w-16 h-16 p-2 flex flex-col items-center justify-center cursor-pointer 
+                       rounded-lg border-2 border-transparent bg-gray-50 
+                       transition duration-200 ease-in-out 
+                       hover:border-blue-500 hover:shadow-lg hover:scale-105"
+            onClick={() => handleAddSticker(sticker.src)}
+          >
+            <img
+              src={sticker.src}
+              alt={sticker.name}
+              className="w-12 h-12 object-contain pointer-events-none"
+            />
+          </div>
+        ))}
+      </div>
+      
+      {/* Clear Button (Optional but useful) */}
+      <button 
+        onClick={() => setStickers([])} 
+        className="mt-4 w-full py-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition"
+      >
+        Clear Stickers
+      </button>
     </div>
   );
 };
 
-export default MultiStickerSelector;
+export default StickerSelector;
