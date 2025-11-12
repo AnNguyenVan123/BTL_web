@@ -6,7 +6,7 @@ import { db } from "../lib/firebase";
 import { Link, useNavigate } from "react-router-dom";
 import { ArrowLeft, Camera, Settings, Users, Flame } from "lucide-react";
 
-import { Upload } from "antd";
+import { Upload, message } from "antd";
 import upload from "../lib/upload";
 
 export default function ProfilePage() {
@@ -46,6 +46,26 @@ export default function ProfilePage() {
     };
     fetchUserData();
   }, [user]);
+
+  const handleCopyProfileLink = async () => {
+    const link = typeof window !== "undefined" ? window.location.href : `/profile`;
+    try {
+      await navigator.clipboard.writeText(link);
+      message.success("Đã sao chép liên kết hồ sơ!");
+    } catch (err) {
+      try {
+        const textarea = document.createElement("textarea");
+        textarea.value = link;
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand("copy");
+        document.body.removeChild(textarea);
+        message.success("Đã sao chép liên kết hồ sơ!");
+      } catch (e) {
+        message.error("Không thể sao chép liên kết.");
+      }
+    }
+  };
 
   if (!user) return <p className="text-center mt-10">⚠️ Bạn chưa đăng nhập.</p>;
   if (!userData) return <p className="text-center mt-10">Đang tải...</p>;
@@ -131,6 +151,12 @@ export default function ProfilePage() {
         >
           Edit Profile
         </Link>
+        <button
+          onClick={handleCopyProfileLink}
+          className="w-full bg-gray-100 text-gray-800 py-3 rounded-2xl font-medium hover:bg-gray-200 hover:scale-[1.01] transition"
+        >
+          Copy profile link
+        </button>
 
         <button className="w-full bg-gray-100 text-gray-800 py-3 rounded-2xl font-medium hover:bg-gray-200 hover:scale-[1.01] transition">
           View My Story
