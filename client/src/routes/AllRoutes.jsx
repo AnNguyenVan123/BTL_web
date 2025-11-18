@@ -7,6 +7,7 @@ import ProfilePage from "../pages/Profile";
 import SettingsPage from "../pages/Settings";
 import Home from "../pages/Home";
 import Chat from "../pages/Chat";
+import VideoChat from "../pages/VideoChat";
 const routes = [
   {
     path: "/",
@@ -26,6 +27,10 @@ const routes = [
         element: <Chat />,
       },
     ],
+  },
+  {
+    path: "/video-chat",
+    element: <VideoChat />,
   },
   { path: "/login", element: <Login /> },
   { path: "/signup", element: <SignupPage /> },

@@ -1,25 +1,39 @@
-import { LeftOutlined } from "@ant-design/icons";
-
-import { Logo } from "../../../layouts/Logo";
+import { useNavigate } from "react-router-dom";
+import {
+  LeftOutlined,
+  PhoneFilled,
+  VideoCameraFilled,
+} from "@ant-design/icons";
 
 export default function Header({ setClose, receiver }) {
+  const navigation = useNavigate();
   return (
-    <div className="w-full flex p-3 gap-3 max-h-[61px] h-1/6">
-      <button
-        className="bg-[#292929] w-9 h-9 rounded-full hover:bg-[#424242]"
-        onClick={() => setClose(true)}
-      >
-        <LeftOutlined style={{ color: "white" }} />
-      </button>
-      <div className="flex gap-3 items-center">
-        <div className="w-9 h-9 rounded-full bg-amber-200 overflow-hidden">
-          <img
-            src={receiver?.photoURL || "/default-avatar.png"}
-            alt="avatar"
-            className="object-cover"
-          />
+    <div className="w-full flex justify-between p-3 gap-3 max-h-[61px] h-1/6">
+      <div className="flex gap-3">
+        <button
+          className="bg-[#292929] w-9 h-9 rounded-full hover:bg-[#424242]"
+          onClick={() => setClose(true)}
+        >
+          <LeftOutlined style={{ color: "white" }} />
+        </button>
+        <div className="flex gap-3 items-center">
+          <div className="w-9 h-9 rounded-full bg-amber-200 overflow-hidden">
+            <img
+              src={receiver?.photoURL || "/default-avatar.png"}
+              alt="avatar"
+              className="object-cover"
+            />
+          </div>
+          <p className="text-white font-semibold">{receiver?.displayName}</p>
         </div>
-        <p className="text-white font-semibold">{receiver?.displayName}</p>
+      </div>
+      <div className="bg-[#292929] flex gap-4 p-4 rounded-4xl text-white items-center">
+        <p className="text-lg font-medium mr-3">Call</p>
+        <PhoneFilled style={{ fontSize: 18, cursor: "pointer" }} />
+        <VideoCameraFilled
+          style={{ fontSize: 18, cursor: "pointer" }}
+          onClick={() => navigation("/video-chat")}
+        />
       </div>
     </div>
   );
