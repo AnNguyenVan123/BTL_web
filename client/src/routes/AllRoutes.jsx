@@ -1,38 +1,27 @@
 import { useRoutes } from "react-router-dom";
-import React from "react"
-import DefaultLayout from "../layouts/default"
+import React from "react";
+import DefaultLayout from "../layouts/default";
 import Login from "../pages/Login";
 import SignupPage from "../pages/SignUp";
 import ProfilePage from "../pages/Profile";
 import SettingsPage from "../pages/Settings";
+import Home from "../pages/Home";
+
 const routes = [
   {
     path: "/",
-    element: React.createElement(DefaultLayout),
+    element: <DefaultLayout />,
     children: [
-      // các route khác trong layout
+      { path: "/", element: <Home /> },  // route mặc định của layout
+      { path: "profile", element: <ProfilePage /> },
+      { path: "settings", element: <SettingsPage /> },
     ],
   },
-  {
-    path: "/login",
-    element: React.createElement(Login),
-  },
-  {
-    path: "/signup",
-    element: React.createElement(SignupPage),
-  },
-   {
-    path: "/profile",
-    element: React.createElement(ProfilePage),
-  },
-   {
-    path: "/settings",
-    element: React.createElement(SettingsPage),
-  },
+  { path: "/login", element: <Login /> },
+  { path: "/signup", element: <SignupPage /> },
 ];
+
 export default function AllRoutes() {
   const elements = useRoutes(routes);
-  return (
-    elements
-  )
+  return elements;
 }
