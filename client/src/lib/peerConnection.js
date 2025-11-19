@@ -1,15 +1,43 @@
 import { rtdb } from "./firebase";
-import { ref, onValue, push, update } from "firebase/database";
-import { store } from "../main"; // Import store để dispatch action từ listener
+import { ref, onValue, push, update, onChildAdded } from "firebase/database";
+import { store } from "../main";
 import { updateParticipant } from "../store/actioncreator";
+
+export const participantConnections = {};
+const candidateQueue = {};
 
 const servers = {
   iceServers: [
     {
-      urls: ["stun:stun1.l.google.com:19302", "stun:stun2.l.google.com:19302"],
+      urls: [
+        "stun:stun1.l.google.com:19302",
+        "stun:stun2.l.google.com:19302",
+        "stun:stun.l.google.com:19302",
+        "stun:stun3.l.google.com:19302",
+        "stun:stun4.l.google.com:19302",
+        "stun:stun.services.mozilla.com",
+      ],
     },
   ],
   iceCandidatePoolSize: 10,
+};
+
+// Hàm hỗ trợ: Xử lý hàng đợi Candidate
+const processCandidateQueue = async (userId, pc) => {
+  if (candidateQueue[userId] && candidateQueue[userId].length > 0) {
+    console.log(
+      `🔄 Đang xử lý ${candidateQueue[userId].length} candidates hàng đợi cho ${userId}`
+    );
+    for (const candidate of candidateQueue[userId]) {
+      try {
+        await pc.addIceCandidate(new RTCIceCandidate(candidate));
+      } catch (error) {
+        console.error("Lỗi add buffered candidate:", error);
+      }
+    }
+    // Xóa hàng đợi sau khi xử lý xong
+    delete candidateQueue[userId];
+  }
 };
 
 // Update preferences (audio/video) theo Room
@@ -29,6 +57,7 @@ export const createOffer = async (
   createdID,
   roomId
 ) => {
+  console.log("da chay vao day");
   const offerCandidatesRef = ref(
     rtdb,
     `rooms/${roomId}/participants/${receiverId}/offerCandidates`
@@ -56,6 +85,8 @@ export const createOffer = async (
     userId: createdID,
   };
 
+  console.log("offer = ", offer);
+
   push(offersRef, { offer });
 };
 
@@ -66,74 +97,119 @@ export const initializeListeners = async (userId, roomId) => {
   const answersRef = ref(rtdb, `${roomPath}/answers`);
   const answerCandidatesRef = ref(rtdb, `${roomPath}/answerCandidates`);
 
-  // Lắng nghe Offer
-  onValue(offersRef, (snapshot) => {
-    snapshot.forEach((childSnapshot) => {
-      const data = childSnapshot.val();
-      if (data?.offer && data.offer.userId !== userId) {
-        const state = store.getState();
-        // Tìm PC của người gửi offer
-        const pc =
-          state.userState.participants[data.offer.userId]?.peerConnection;
-        if (pc) {
-          pc.setRemoteDescription(new RTCSessionDescription(data.offer)).then(
-            () => createAnswer(data.offer.userId, userId, roomId)
-          );
+  onChildAdded(offersRef, async (snapshot) => {
+    const data = snapshot.val();
+
+    // Kiểm tra xem có offer và người gửi không phải là chính mình
+    if (data?.offer && data.offer.userId !== userId) {
+      console.log("📩 Đã nhận được Offer từ:", data.offer.userId);
+
+      const senderId = data.offer.userId;
+
+      const pc = participantConnections[senderId];
+
+      // Bên trong listener nhận Offer
+      if (pc) {
+        try {
+          console.log("Trạng thái hiện tại:", pc.signalingState);
+
+          const isReadyToReceive =
+            pc.signalingState === "stable" ||
+            pc.signalingState === "have-remote-offer";
+
+          if (isReadyToReceive) {
+            console.log("⚙️ Đang set Remote Description...");
+
+            await pc.setRemoteDescription(
+              new RTCSessionDescription(data.offer)
+            );
+
+            console.log("Trạng thái sau khi set Remote:", pc.signalingState);
+
+            await processCandidateQueue(senderId, pc);
+
+            console.log("✍️ Đang tạo Answer...");
+            await createAnswer(senderId, userId, roomId);
+          } else {
+            console.warn(
+              "⚠️ Bỏ qua Offer vì đang bận xử lý tiến trình khác (Glare):",
+              pc.signalingState
+            );
+          }
+        } catch (error) {
+          console.error("❌ Lỗi khi xử lý Offer:", error);
         }
       }
-    });
+    }
   });
 
-  // Lắng nghe ICE Candidates cho Offer
-  onValue(offerCandidatesRef, (snapshot) => {
-    snapshot.forEach((childSnapshot) => {
-      const data = childSnapshot.val();
-      if (data?.userId) {
-        const state = store.getState();
-        const pc = state.userState.participants[data.userId]?.peerConnection;
-        if (pc && data.candidate) {
+  // 2. Lắng nghe ICE Candidates cho Offer (Sửa onValue -> onChildAdded)
+  onChildAdded(offerCandidatesRef, (snapshot) => {
+    const data = snapshot.val();
+    if (data?.userId && data?.candidate) {
+      const pc = participantConnections[data.userId];
+      if (pc) {
+        if (pc.remoteDescription) {
           pc.addIceCandidate(new RTCIceCandidate(data)).catch(console.error);
+        } else {
+          console.warn("⏳ Candidate đến sớm, đang đưa vào hàng đợi...");
+          if (!candidateQueue[data.userId]) candidateQueue[data.userId] = [];
+          candidateQueue[data.userId].push(data);
         }
       }
-    });
+    }
   });
 
-  // Lắng nghe Answer
-  onValue(answersRef, (snapshot) => {
-    snapshot.forEach((childSnapshot) => {
-      const data = childSnapshot.val();
-      if (data?.answer && data.answer.userId !== userId) {
-        const state = store.getState();
-        const pc =
-          state.userState.participants[data.answer.userId]?.peerConnection;
-        if (pc) {
-          pc.setRemoteDescription(new RTCSessionDescription(data.answer)).catch(
-            console.error
-          );
+  // 3. Lắng nghe Answer
+  onChildAdded(answersRef, async (snapshot) => {
+    const data = snapshot.val();
+    if (data?.answer && data.answer.userId !== userId) {
+      console.log("📩 Đã nhận Answer từ:", data.answer.userId);
+      const pc = participantConnections[data.answer.userId];
+
+      if (pc) {
+        try {
+          if (!pc.currentRemoteDescription) {
+            await pc.setRemoteDescription(
+              new RTCSessionDescription(data.answer)
+            );
+            console.log("✅ Đã set Remote Description (Answer)");
+            await processCandidateQueue(data.answer.userId, pc);
+          }
+        } catch (e) {
+          console.error(e);
         }
       }
-    });
+    }
   });
 
-  // Lắng nghe ICE Candidates cho Answer
-  onValue(answerCandidatesRef, (snapshot) => {
-    snapshot.forEach((childSnapshot) => {
-      const data = childSnapshot.val();
-      if (data?.userId) {
-        const state = store.getState();
-        const pc = state.userState.participants[data.userId]?.peerConnection;
-        if (pc && data.candidate) {
+  // 4. Lắng nghe ICE Candidates cho Answer
+  onChildAdded(answerCandidatesRef, (snapshot) => {
+    const data = snapshot.val();
+    if (data?.userId && data?.candidate) {
+      const pc = participantConnections[data.userId];
+
+      if (pc) {
+        if (pc.remoteDescription) {
           pc.addIceCandidate(new RTCIceCandidate(data)).catch(console.error);
+        } else {
+          console.warn("⏳ Answer Candidate đến sớm, đưa vào hàng đợi...");
+          if (!candidateQueue[data.userId]) candidateQueue[data.userId] = [];
+          candidateQueue[data.userId].push(data);
         }
       }
-    });
+    }
   });
 };
 
 const createAnswer = async (otherUserId, userId, roomId) => {
-  const state = store.getState();
-  const pc = state.userState.participants[otherUserId]?.peerConnection;
-  if (!pc) return;
+  // const state = store.getState();
+  // const pc = state.userState.participants[otherUserId]?.peerConnection;
+  const pc = participantConnections[otherUserId];
+  if (!pc) {
+    console.error("Không tìm thấy PC để tạo answer");
+    return;
+  }
 
   const answerCandidatesRef = ref(
     rtdb,
@@ -154,6 +230,12 @@ const createAnswer = async (otherUserId, userId, roomId) => {
   };
 
   const answerDescription = await pc.createAnswer();
+  if (pc.signalingState === "stable") {
+    console.warn(
+      "⚠️ Connection đã stable, bỏ qua việc setLocalDescription trùng lặp."
+    );
+    return;
+  }
   await pc.setLocalDescription(answerDescription);
 
   const answer = {
@@ -161,27 +243,31 @@ const createAnswer = async (otherUserId, userId, roomId) => {
     sdp: answerDescription.sdp,
     userId: userId,
   };
-
+  console.log("✅ Đã tạo và gửi Answer:", answer);
   push(answersRef, { answer });
 };
 
-// Hàm quan trọng nhất: Tạo kết nối và xử lý stream
+// Tạo kết nối và xử lý stream
 export const addConnection = (newUser, currentUser, stream, roomId) => {
+  const newUserId = Object.keys(newUser)[0];
+  console.log("newUserId = ", newUserId);
+  console.log("state.mainstream = ", stream);
+  if (participantConnections[newUserId]) {
+    console.log("Connection already exists for", newUserId);
+    return newUser;
+  }
   const peerConnection = new RTCPeerConnection(servers);
-
+  participantConnections[newUserId] = peerConnection;
   if (stream) {
     stream.getTracks().forEach((track) => {
       peerConnection.addTrack(track, stream);
     });
   }
 
-  const newUserId = Object.keys(newUser)[0];
-  const currentUserId = Object.keys(currentUser)[0];
+  console.log("peerConnection = ", peerConnection);
 
-  // **QUAN TRỌNG: Lắng nghe remote stream**
   peerConnection.ontrack = (event) => {
-    // Dispatch action để update stream vào Redux state
-    // Lưu ý: Stream là object phức tạp, Redux có thể warning, nhưng cần thiết cho video
+    console.log("📡 Received Remote Stream from:", Object.keys(newUser)[0]);
     if (event.streams && event.streams[0]) {
       store.dispatch(
         updateParticipant({
@@ -193,14 +279,17 @@ export const addConnection = (newUser, currentUser, stream, roomId) => {
     }
   };
 
+  const currentUserId = Object.keys(currentUser)[0];
   const offerIds = [newUserId, currentUserId].sort((a, b) =>
     a.localeCompare(b)
   );
-
-  newUser[newUserId].peerConnection = peerConnection;
+  console.log(offerIds);
 
   if (offerIds[0] === currentUserId) {
+    console.log("🚀 Tôi là người tạo Offer (Initiator)");
     createOffer(peerConnection, newUserId, currentUserId, roomId);
+  } else {
+    console.log("⏳ Tôi sẽ đợi Offer từ phía bên kia (Receiver)");
   }
 
   return newUser;

@@ -19,22 +19,6 @@ let defaultUserState = {
   currentUser: null,
 };
 
-const servers = {
-  iceServers: [
-    {
-      urls: [
-        "stun:stun1.l.google.com:19302",
-        "stun:stun2.l.google.com:19302",
-        "stun:stun.l.google.com:19302",
-        "stun:stun3.l.google.com:19302",
-        "stun:stun4.l.google.com:19302",
-        "stun:stun.services.mozilla.com",
-      ],
-    },
-  ],
-  iceCandidatePoolSize: 10,
-};
-
 const generateColor = () =>
   "#" + Math.floor(Math.random() * 16777215).toString(16);
 
@@ -42,12 +26,13 @@ export const userReducer = (state = defaultUserState, action) => {
   let payload = action.payload;
   if (action.type === SET_MAIN_STREAM) {
     state = { ...state, ...payload };
+    console.log("Main stream state: ", state);
     return state;
   } else if (action.type === ADD_PARTICIPANT) {
     const currentUserId = Object.keys(state.currentUser)[0];
     const newUserId = Object.keys(payload.newUser)[0];
     if (state.mainStream && currentUserId !== newUserId) {
-      payload.newUser = addConnection(
+      addConnection(
         payload.newUser,
         state.currentUser,
         state.mainStream,
@@ -55,16 +40,13 @@ export const userReducer = (state = defaultUserState, action) => {
       );
     }
 
-    if (currentUserId === newUserId)
-      payload.newUser[newUserId].currentUser = true;
-    // payload.newUser[newUserId].avatarColor = generateColor();
     let participants = { ...state.participants, ...payload.newUser };
     state = { ...state, participants };
     return state;
   } else if (action.type === SET_USER) {
     const userId = Object.keys(payload.currentUser)[0];
     payload.currentUser[userId].avatarColor = generateColor();
-    initializeListeners(userId, payload.rooomId);
+    initializeListeners(userId, payload.roomId);
     return {
       ...state,
       currentUser: { ...payload.currentUser },
@@ -96,6 +78,11 @@ export const userReducer = (state = defaultUserState, action) => {
     };
     let participants = { ...state.participants, ...payload.newUser };
     state = { ...state, participants };
+    console.log(
+      "Reducer Update Participant:",
+      newUserId,
+      payload.newUser[newUserId]
+    );
     return state;
   }
   return state;

@@ -7,7 +7,12 @@ import ControlPanel from "@/components/pages/video-chat/ControlPanel";
 import ParticipantsSidebar from "@/components/pages/video-chat/ParticipantsSidebar";
 import ChatPanel from "@/components/pages/video-chat/ChatPanel";
 import { Toaster } from "@/components/ui/toaster";
-import { setMainStream, setUser, addParticipant } from "@/store/actioncreator";
+import {
+  setMainStream,
+  setUser,
+  addParticipant,
+  removeParticipant,
+} from "@/store/actioncreator";
 import { rtdb } from "@/lib/firebase";
 import {
   ref,
@@ -32,34 +37,13 @@ export default function VideoChat() {
   const { user } = useAuth();
   const { participants } = useSelector((state) => state.userState);
 
-  // const [messages] = useState([
-  //   {
-  //     id: 1,
-  //     sender: "Sarah Johnson",
-  //     text: "Hey everyone! 👋",
-  //     timestamp: "10:30 AM",
-  //   },
-  //   {
-  //     id: 2,
-  //     sender: "Mike Chen",
-  //     text: "Great to see you all!",
-  //     timestamp: "10:31 AM",
-  //   },
-  //   {
-  //     id: 3,
-  //     sender: "Emma Davis",
-  //     text: "Can we start the presentation?",
-  //     timestamp: "10:32 AM",
-  //   },
-  // ]);
   const [messages] = useState([]);
 
   // Khởi tạo video call khi component mount
   useEffect(() => {
-    // Nếu không có roomId, redirect về trang chủ hoặc tạo phòng mới
     if (!roomId) {
       console.error("Missing Room ID");
-      // navigate('/');
+      navigate("/");
       return;
     }
 
@@ -110,7 +94,9 @@ export default function VideoChat() {
           roomParticipantsRef,
           (snapshot) => {
             const newUserId = snapshot.key;
+            console.log("newUserId = ", newUserId);
             const data = snapshot.val();
+            console.log("data = ", data);
 
             // Chỉ add participant khác mình
             if (newUserId !== userId) {
