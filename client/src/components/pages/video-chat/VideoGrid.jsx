@@ -7,6 +7,12 @@ const VideoGrid = ({ isCameraOff }) => {
     (state) => state.userState
   );
 
+  console.log("Current User:", currentUser);
+  console.log("Other Participants:", participants);
+  console.log(
+    "Total Count:",
+    (currentUser ? 1 : 0) + Object.keys(participants).length
+  );
   // Kết hợp current user và participants
   const allParticipants = [
     ...(currentUser
