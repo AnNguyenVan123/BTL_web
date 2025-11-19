@@ -16,14 +16,10 @@
     "@tailwindcss/vite": "^4.1.16",
     "@tensorflow/tfjs": "^4.22.0",
     "antd": "^5.27.6",
-<<<<<<< HEAD
     "firebase": "^12.6.0",
     "framer-motion": "^12.23.24",
     "lucide-react": "^0.554.0",
     "opencv.js": "^1.2.1",
-=======
-    "framer-motion": "^12.23.24",
->>>>>>> aeb4c394dacbcd281f132f726a02b9fa9b1b10b5
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "react-draggable": "^4.5.0",
