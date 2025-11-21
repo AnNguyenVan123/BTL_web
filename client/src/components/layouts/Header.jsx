@@ -21,50 +21,50 @@ export default function Header() {
   // Nếu có user → tạo menu đầy đủ
   const items = user
     ? [
-      {
-        key: "profile",
-        label: (
-          <div className="flex items-center gap-3 px-2 py-1">
-            <Avatar
-              size="small"
-              src={user.photoURL}
-              icon={<UserOutlined />}
-            />
-            <div>
-              <p className="font-semibold">
-                {user.displayName || user.email}
-              </p>
-              <p className="text-xs text-gray-500">My Account</p>
+        {
+          key: "profile",
+          label: (
+            <div className="flex items-center gap-3 px-2 py-1">
+              <Avatar
+                size="small"
+                src={user.photoURL}
+                icon={<UserOutlined />}
+              />
+              <div>
+                <p className="font-semibold">
+                  {user.displayName || user.email}
+                </p>
+                <p className="text-xs text-gray-500">My Account</p>
+              </div>
             </div>
-          </div>
-        ),
-        disabled: true,
-      },
-      { type: "divider" },
-      {
-        key: "profile-link",
-        icon: <ProfileOutlined />,
-        label: <Link to="/profile">View Profile</Link>,
-      },
-      {
-        key: "settings",
-        icon: <SettingOutlined />,
-        label: <Link to="/settings">Settings</Link>,
-      },
-      { type: "divider" },
-      {
-        key: "logout",
-        icon: <LogoutOutlined />,
-        label: "Log out",
-        danger: true,
-      },
-    ]
+          ),
+          disabled: true,
+        },
+        { type: "divider" },
+        {
+          key: "profile-link",
+          icon: <ProfileOutlined />,
+          label: <Link to="/profile">View Profile</Link>,
+        },
+        {
+          key: "settings",
+          icon: <SettingOutlined />,
+          label: <Link to="/settings">Settings</Link>,
+        },
+        { type: "divider" },
+        {
+          key: "logout",
+          icon: <LogoutOutlined />,
+          label: "Log out",
+          danger: true,
+        },
+      ]
     : [
-      {
-        key: "login",
-        label: <Link to="/login">Log in</Link>,
-      },
-    ];
+        {
+          key: "login",
+          label: <Link to="/login">Log in</Link>,
+        },
+      ];
 
   const onClick = async ({ key }) => {
     if (key === "logout") {
@@ -110,10 +110,12 @@ export default function Header() {
           <FireOutlined style={{ fontSize: "28px" }} />
           <p>Spotlight</p>
         </div>
-        <div className="flex flex-col items-center">
-          <MessageOutlined style={{ fontSize: "28px" }} />
-          <p>Chat</p>
-        </div>
+        <Link to={"/chat"}>
+          <div className="flex flex-col items-center">
+            <MessageOutlined style={{ fontSize: "28px" }} />
+            <p>Chat</p>
+          </div>
+        </Link>
         <div className="flex flex-col items-center">
           <VideoCameraAddOutlined style={{ fontSize: "28px" }} />
           <p>Lenses</p>
@@ -150,5 +152,3 @@ export default function Header() {
     </header>
   );
 }
-
-
