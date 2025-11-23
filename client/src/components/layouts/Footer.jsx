@@ -2,7 +2,7 @@ import { Select } from "antd";
 
 export default function Footer() {
   return (
-    <footer className="p-10 absolute bg-[#F8F9FB] bottom-0 w-full">
+    <footer className="p-10 bg-[#F8F9FB] bottom-0 w-full">
       <div className="max-w-5xl mx-auto flex flex-col gap-5">
         <div className="grid grid-cols-4 justify-center">
           <div>
