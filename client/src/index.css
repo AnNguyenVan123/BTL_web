@@ -1,5 +1,27 @@
 @import "tailwindcss";
 
+:root {
+  --bg: #ffffff;
+  --text: #0f1724;
+  --muted: #6b7280;
+  --header-bg: #ffffff;
+  --accent: #f59e0b;
+}
+
+html.dark {
+  --bg: #0b1220;
+  --text: #e5e7eb;
+  --muted: #9ca3af;
+  --header-bg: #071023;
+  --accent: #fbbf24;
+}
+
+body {
+  background-color: var(--bg);
+  color: var(--text);
+  transition: background-color 200ms ease, color 200ms ease;
+}
+
 @theme {
   --font-sans: "Jost", sans-serif;
 }
