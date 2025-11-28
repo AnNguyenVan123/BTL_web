@@ -18,6 +18,7 @@ import {
   ref,
   onValue,
   set,
+  update,
   onDisconnect,
   onChildAdded,
   onChildRemoved,
@@ -35,9 +36,30 @@ export default function VideoChat() {
 
   const dispatch = useDispatch();
   const { user } = useAuth();
-  const { participants } = useSelector((state) => state.userState);
+  const { participants, mainStream } = useSelector((state) => state.userState);
 
   const [messages] = useState([]);
+
+  const toggleMic = () => {
+    if (mainStream) {
+      const audioTrack = mainStream.getAudioTracks()[0];
+      if (audioTrack) {
+        audioTrack.enabled = !audioTrack.enabled;
+        setIsMuted(!audioTrack.enabled); // Cập nhật UI
+      }
+    }
+  };
+
+  const toggleCamera = () => {
+    if (mainStream) {
+      const videoTrack = mainStream.getVideoTracks()[0];
+      console.log(videoTrack);
+      if (videoTrack) {
+        videoTrack.enabled = !videoTrack.enabled;
+        setIsCameraOff(!videoTrack.enabled); // Cập nhật UI
+      }
+    }
+  };
 
   // Khởi tạo video call khi component mount
   useEffect(() => {
@@ -94,9 +116,7 @@ export default function VideoChat() {
           roomParticipantsRef,
           (snapshot) => {
             const newUserId = snapshot.key;
-            console.log("newUserId = ", newUserId);
             const data = snapshot.val();
-            console.log("data = ", data);
 
             // Chỉ add participant khác mình
             if (newUserId !== userId) {
@@ -138,7 +158,7 @@ export default function VideoChat() {
     };
 
     initVideoCall();
-  }, [user?.uid, roomId, dispatch]);
+  }, [user?.uid, roomId, dispatch, navigate]);
 
   return (
     <>
@@ -167,9 +187,9 @@ export default function VideoChat() {
           {/* Control Panel */}
           <ControlPanel
             isMuted={isMuted}
-            setIsMuted={setIsMuted}
+            toggleMic={toggleMic}
             isCameraOff={isCameraOff}
-            setIsCameraOff={setIsCameraOff}
+            toggleCamera={toggleCamera}
             isChatOpen={isChatOpen}
             setIsChatOpen={setIsChatOpen}
             isSidebarOpen={isSidebarOpen}

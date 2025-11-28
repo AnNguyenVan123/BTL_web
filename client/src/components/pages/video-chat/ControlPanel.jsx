@@ -14,9 +14,9 @@ import { useToast } from "@/components/ui/use-toast";
 
 const ControlPanel = ({
   isMuted,
-  setIsMuted,
+  toggleMic,
   isCameraOff,
-  setIsCameraOff,
+  toggleCamera,
   isChatOpen,
   setIsChatOpen,
   isSidebarOpen,
@@ -45,7 +45,7 @@ const ControlPanel = ({
             <Button
               variant="outline"
               size="icon"
-              onClick={() => setIsMuted(!isMuted)}
+              onClick={toggleMic}
               className={`w-14 h-14 md:w-16 md:h-16 rounded-full border-4 transition-all duration-300 ${
                 isMuted
                   ? "bg-red-500 border-red-600 hover:bg-red-600 text-white"
@@ -63,7 +63,7 @@ const ControlPanel = ({
             <Button
               variant="outline"
               size="icon"
-              onClick={() => setIsCameraOff(!isCameraOff)}
+              onClick={toggleCamera}
               className={`w-14 h-14 md:w-16 md:h-16 rounded-full border-4 transition-all duration-300 ${
                 isCameraOff
                   ? "bg-red-500 border-red-600 hover:bg-red-600 text-white"

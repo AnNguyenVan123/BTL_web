@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import { useEffect } from "react";
 
 const CameraStream = ({ videoRef }) => {
   useEffect(() => {
@@ -8,7 +8,6 @@ const CameraStream = ({ videoRef }) => {
         .then((stream) => {
           if (videoRef.current) {
             videoRef.current.srcObject = stream;
-            // No need to call videoRef.current.play() since autoPlay is used
           }
         })
         .catch((err) => console.error("Error accessing camera: ", err));
@@ -16,21 +15,21 @@ const CameraStream = ({ videoRef }) => {
 
     // Cleanup function to stop the video stream when the component unmounts
     return () => {
-        const stream = videoRef.current?.srcObject;
-        if (stream) {
-            stream.getTracks().forEach(track => track.stop());
-        }
+      const stream = videoRef.current?.srcObject;
+      if (stream) {
+        stream.getTracks().forEach((track) => track.stop());
+      }
     };
   }, [videoRef]);
 
   // The video element is hidden (display: "none"), but crucial for feeding frames to Mediapipe.
   return (
-    <video 
-      ref={videoRef} 
-      autoPlay 
-      playsInline 
-      className="hidden" // Tailwind for display: none
-      width="640" // Explicit dimensions for the stream
+    <video
+      ref={videoRef}
+      autoPlay
+      playsInline
+      className="hidden"
+      width="640"
       height="480"
     ></video>
   );
