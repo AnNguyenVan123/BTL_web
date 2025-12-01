@@ -5,8 +5,45 @@ import {
   VideoCameraFilled,
 } from "@ant-design/icons";
 
+import { rtdb } from "../../../../lib/firebase";
+import { ref, set } from "firebase/database";
+import { v4 as uuidv4 } from "uuid";
+
+import { useAuth } from "../../../../context/AuthContext";
+
 export default function Header({ setClose, receiver }) {
-  const navigation = useNavigate();
+  const navigate = useNavigate();
+  const { user } = useAuth();
+
+  // Hàm gọi điện
+  const callUser = async (currentUser, targetUserId) => {
+    // 1. Tạo Room ID mới
+    const newRoomId = uuidv4();
+
+    // 2. Chuẩn bị dữ liệu cuộc gọi
+    const callPayload = {
+      callerId: currentUser.uid,
+      callerName: currentUser.displayName || "Anonymous",
+      callerPhoto: currentUser.photoURL || "/default-avatar.png",
+      roomId: newRoomId,
+      timestamp: Date.now(),
+    };
+
+    // 3. Ghi vào nhánh incomingCall của NGƯỜI NHẬN (targetUserId)
+    try {
+      const targetRef = ref(rtdb, `users/${targetUserId}/incomingCall`);
+      await set(targetRef, callPayload);
+
+      // 4. Tự động chuyển người gọi vào phòng luôn để chờ
+      navigate(`/video-chat?id=${newRoomId}`);
+    } catch (error) {
+      console.error("Không thể thực hiện cuộc gọi:", error);
+      alert({
+        title: "Lỗi",
+        description: "Không thể kết nối tới người dùng này.",
+      });
+    }
+  };
   return (
     <div className="w-full flex justify-between p-3 gap-3 max-h-[61px] h-1/6">
       <div className="flex gap-3">
@@ -32,7 +69,11 @@ export default function Header({ setClose, receiver }) {
         <PhoneFilled style={{ fontSize: 18, cursor: "pointer" }} />
         <VideoCameraFilled
           style={{ fontSize: 18, cursor: "pointer" }}
-          onClick={() => navigation("/video-chat")}
+          title="Video Call"
+          onClick={(e) => {
+            e.stopPropagation();
+            callUser(user, receiver.uid);
+          }}
         />
       </div>
     </div>
