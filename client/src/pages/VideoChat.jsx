@@ -9,7 +9,14 @@ import ChatPanel from "@/components/pages/video-chat/ChatPanel";
 import { Toaster } from "@/components/ui/toaster";
 import { setMainStream, setUser, addParticipant } from "@/store/actioncreator";
 import { rtdb } from "@/lib/firebase";
-import { ref, onValue } from "firebase/database";
+import {
+  ref,
+  onValue,
+  set,
+  onDisconnect,
+  onChildAdded,
+  onChildRemoved,
+} from "firebase/database";
 import { useAuth } from "@/context/AuthContext";
 
 export default function VideoChat() {
