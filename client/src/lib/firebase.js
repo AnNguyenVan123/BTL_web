@@ -3,6 +3,7 @@ import { getAuth, GoogleAuthProvider } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 import { getAnalytics, isSupported } from "firebase/analytics";
 import { getStorage } from "firebase/storage";
+import { getDatabase, ref as dbRef } from "firebase/database";
 
 // Cấu hình Firebase
 const firebaseConfig = {
@@ -13,6 +14,7 @@ const firebaseConfig = {
   messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
   measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
+  databaseURL: import.meta.env.VITE_FIREBASE_DATABASE,
 };
 
 // Khởi tạo Firebase
@@ -20,6 +22,9 @@ const app = initializeApp(firebaseConfig);
 
 // Khởi tạo Firestore
 const db = getFirestore(app);
+
+// Khởi tạo Realtime Database (cho signaling video call)
+const rtdb = getDatabase(app);
 
 // Khởi tạo Auth
 const auth = getAuth(app);
@@ -33,4 +38,4 @@ isSupported().then((supported) => {
   }
 });
 
-export { auth, googleProvider, db, storage };
+export { auth, googleProvider, db, storage, rtdb };

@@ -1,9 +1,11 @@
 import { useContext } from "react";
+import { useNavigate } from "react-router-dom";
 import { ChatContext } from "../../../../context/ChatContext";
 
-import { CameraOutlined } from "@ant-design/icons";
+import { CameraOutlined, VideoCameraFilled } from "@ant-design/icons";
 
 export default function UserChat({ receiver, chat }) {
+  const navigate = useNavigate();
   const { setClose, setSelectedChatId, setReceiver } = useContext(ChatContext);
   return (
     <div
@@ -31,8 +33,19 @@ export default function UserChat({ receiver, chat }) {
           </div>
         </div>
       </div>
-      <div className="grid place-content-cener">
+      <div className="grid grid-cols-2 gap-2 place-content-center">
         <CameraOutlined style={{ color: "white", fontSize: 20 }} />
+        <VideoCameraFilled
+          style={{ color: "#00e676", fontSize: 22, cursor: "pointer" }}
+          title="Video Call"
+          onClick={(e) => {
+            e.stopPropagation();
+            if (chat?.chatId) {
+              // Điều hướng tới VideoChat page với roomId = chatId
+              navigate(`/video-chat?id=${chat.chatId}`);
+            }
+          }}
+        />
       </div>
     </div>
   );
