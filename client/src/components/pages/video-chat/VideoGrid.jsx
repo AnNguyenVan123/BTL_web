@@ -7,12 +7,6 @@ const VideoGrid = ({ isCameraOff }) => {
     (state) => state.userState
   );
 
-  console.log("Current User:", currentUser);
-  console.log("Other Participants:", participants);
-  console.log(
-    "Total Count:",
-    (currentUser ? 1 : 0) + Object.keys(participants).length
-  );
   // Kết hợp current user và participants
   const allParticipants = [
     ...(currentUser
@@ -24,12 +18,17 @@ const VideoGrid = ({ isCameraOff }) => {
           isCameraOff: !data.video,
         }))
       : []),
-    ...Object.entries(participants).map(([id, data]) => ({
-      id,
-      ...data,
-      isMe: false,
-      isCameraOff: !data.video,
-    })),
+    ...Object.entries(participants).map(([id, data]) => {
+      if (!data.stream) console.warn(`Participant ${id} missing stream!`);
+
+      return {
+        id,
+        ...data,
+        isMe: false,
+        stream: data.stream,
+        isCameraOff: !data.video,
+      };
+    }),
   ];
 
   const getGridClass = () => {
