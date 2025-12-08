@@ -18,7 +18,7 @@ const VideoTile = ({ participant, isMe, isCameraOff }) => {
     if (videoRef.current && participant.stream) {
       videoRef.current.srcObject = participant.stream;
     }
-  }, [participant.stream]);
+  }, [participant.stream, isCameraOff]);
 
   return (
     <motion.div
@@ -42,10 +42,8 @@ const VideoTile = ({ participant, isMe, isCameraOff }) => {
             ref={videoRef}
             autoPlay
             playsInline
-            // 3. Quan trọng: Mute chính mình để tránh Echo (tiếng vọng vòng lặp)
             muted={isMe}
             className={`w-full h-full object-cover ${
-              // 4. Lật ngược video của chính mình cho tự nhiên (như gương)
               isMe ? "scale-x-[-1]" : ""
             }`}
           />
