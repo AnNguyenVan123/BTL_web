@@ -22,13 +22,20 @@ const ControlPanel = ({
   isSidebarOpen,
   setIsSidebarOpen,
   participantCount,
+  onLeave,
 }) => {
   const { toast } = useToast();
 
   const handleEndCall = () => {
-    toast({
-      title: "🚧 Feature Not Implemented",
-    });
+    if (onLeave) {
+      onLeave();
+    } else {
+      toast({
+        title: "Error",
+        description: "Cannot end call right now.",
+        variant: "destructive",
+      });
+    }
   };
 
   return (

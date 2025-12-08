@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import { Helmet } from "react-helmet";
@@ -22,6 +22,7 @@ import {
   onDisconnect,
   onChildAdded,
   onChildRemoved,
+  remove,
 } from "firebase/database";
 import { useAuth } from "@/context/AuthContext";
 
@@ -33,6 +34,7 @@ export default function VideoChat() {
   const [searchParams] = useSearchParams();
   const roomId = searchParams.get("id");
   const navigate = useNavigate();
+  const streamRef = useRef(null);
 
   const dispatch = useDispatch();
   const { user } = useAuth();
@@ -61,6 +63,26 @@ export default function VideoChat() {
     }
   };
 
+  const performCleanup = async () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+    }
+
+    if (roomId && user?.uid) {
+      const participantRef = ref(
+        rtdb,
+        `rooms/${roomId}/participants/${user.uid}`
+      );
+      await remove(participantRef);
+    }
+  };
+
+  const handleLeaveCall = async () => {
+    await performCleanup();
+    navigate("/chat");
+    window.location.reload();
+  };
+
   // Khởi tạo video call khi component mount
   useEffect(() => {
     if (!roomId) {
@@ -77,6 +99,8 @@ export default function VideoChat() {
           video: true,
           audio: true,
         });
+        // Lưu vào Ref để dùng cho cleanup sau này
+        streamRef.current = stream;
 
         dispatch(setMainStream(stream));
 
@@ -145,10 +169,22 @@ export default function VideoChat() {
           }
         );
 
+        const handleBeforeUnload = (e) => {
+          if (streamRef.current) {
+            streamRef.current.getTracks().forEach((t) => t.stop());
+          }
+        };
+        window.addEventListener("beforeunload", handleBeforeUnload);
+
         return () => {
+          window.removeEventListener("beforeunload", handleBeforeUnload);
+
           unsubscribeAdded();
           unsubscribeRemoved();
-          stream.getTracks().forEach((track) => track.stop());
+          if (streamRef.current) {
+            streamRef.current.getTracks().forEach((track) => track.stop());
+          }
+          // stream.getTracks().forEach((track) => track.stop());
           // Remove self from room explicitly on component unmount
           set(participantRef, null);
         };
@@ -195,6 +231,7 @@ export default function VideoChat() {
             isSidebarOpen={isSidebarOpen}
             setIsSidebarOpen={setIsSidebarOpen}
             participantCount={Object.keys(participants).length + 1}
+            onLeave={handleLeaveCall}
           />
         </div>
 
