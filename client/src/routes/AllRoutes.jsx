@@ -1,4 +1,4 @@
-import { useRoutes } from "react-router-dom";
+import { useRoutes, useLocation } from "react-router-dom";
 import DefaultLayout from "../layouts/default";
 import ChatLayout from "../layouts/chatLayout";
 import Login from "../pages/Login";
@@ -8,6 +8,7 @@ import SettingsPage from "../pages/Settings";
 import Home from "../pages/Home";
 import Chat from "../pages/Chat";
 import VideoChat from "../pages/VideoChat";
+import IncomingCallDialog from "../components/pages/video-chat/IncomingCallDialog";
 const routes = [
   {
     path: "/",
@@ -38,5 +39,12 @@ const routes = [
 
 export default function AllRoutes() {
   const elements = useRoutes(routes);
-  return elements;
+  const location = useLocation();
+  const isVideoCallPage = location.pathname.startsWith("/video-chat");
+  return (
+    <>
+      {elements}
+      {!isVideoCallPage && <IncomingCallDialog />}
+    </>
+  );
 }
