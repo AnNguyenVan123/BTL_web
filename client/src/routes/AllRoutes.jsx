@@ -9,6 +9,9 @@ import Home from "../pages/Home";
 import Chat from "../pages/Chat";
 import VideoChat from "../pages/VideoChat";
 import IncomingCallDialog from "../components/pages/video-chat/IncomingCallDialog";
+import StoriesPage from "../components/pages/stories/StoriesPage";
+import EditProfile from "../components/pages/profile/EditProfile";
+import AddFriend from "../components/pages/friends/AddFriendModal";
 const routes = [
   {
     path: "/",
@@ -18,6 +21,18 @@ const routes = [
       { path: "profile", element: <ProfilePage /> },
       { path: "settings", element: <SettingsPage /> },
     ],
+  },
+ {
+    path: "/stories",
+    element: <StoriesPage />,
+  },
+  //  {
+  //   path: "/add-friend",
+  //   element: <AddFriend />,
+  // },
+  {
+    path: "/edit-profile",
+    element: <EditProfile />,
   },
   {
     path: "/chat",
