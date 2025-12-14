@@ -33,7 +33,9 @@ export default function Header() {
       }
       try {
         localStorage.setItem("theme", theme);
-      } catch (e) {}
+      } catch (e) {
+        console.error("Failed to save theme to localStorage:", e);
+      }
     }
   }, [theme]);
 
@@ -121,10 +123,13 @@ export default function Header() {
         id="header-features"
         className="flex gap-8 max-w-[384px] place-self-center cursor-pointer"
       >
+
+        <Link to={"/stories"}>
         <div className="flex flex-col items-center">
           <PlayCircleOutlined style={{ fontSize: "28px" }} />
           <p>Stories</p>
         </div>
+        </Link>
         <div className="flex flex-col items-center">
           <FireOutlined style={{ fontSize: "28px" }} />
           <p>Spotlight</p>
