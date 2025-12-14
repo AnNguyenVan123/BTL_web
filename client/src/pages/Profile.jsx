@@ -9,10 +9,14 @@ import { ArrowLeft, Camera, Settings, Users, Flame } from "lucide-react";
 import { Upload, message } from "antd";
 import upload from "../lib/upload";
 
+// Import AddFriendModal
+import AddFriendModal from "../components/pages/friends/AddFriendModal";
+
 export default function ProfilePage() {
   const { user, setUser } = useAuth();
   const [userData, setUserData] = useState(null);
   const navigate = useNavigate();
+  const [isAddFriendOpen, setIsAddFriendOpen] = useState(false); // <-- modal state
 
   const handleChangeAvatar = async (file) => {
     if (!file) return;
@@ -51,7 +55,7 @@ export default function ProfilePage() {
     const link = typeof window !== "undefined" ? window.location.href : `/profile`;
     try {
       await navigator.clipboard.writeText(link);
-      message.success("Đã sao chép liên kết hồ sơ!");
+      message.success("Profile link copied!");
     } catch (err) {
       try {
         const textarea = document.createElement("textarea");
@@ -60,15 +64,15 @@ export default function ProfilePage() {
         textarea.select();
         document.execCommand("copy");
         document.body.removeChild(textarea);
-        message.success("Đã sao chép liên kết hồ sơ!");
+        message.success("Profile link copied!");
       } catch (e) {
-        message.error("Không thể sao chép liên kết.");
+        message.error("Cannot copy profile link.");
       }
     }
   };
 
-  if (!user) return <p className="text-center mt-10">⚠️ Bạn chưa đăng nhập.</p>;
-  if (!userData) return <p className="text-center mt-10">Đang tải...</p>;
+  if (!user) return <p className="text-center mt-10">⚠️ You are not logged in.</p>;
+  if (!userData) return <p className="text-center mt-10">Loading...</p>;
 
   return (
     <div className="bg-[#fffefb] text-gray-800 p-10">
@@ -136,9 +140,7 @@ export default function ProfilePage() {
               <Users className="w-6 h-6 text-blue-500 mx-auto" />
             </div>
             <p className="text-sm text-gray-500 mt-1">Friends</p>
-            <p className="font-semibold text-lg">
-              {userData.friendsCount || 0}
-            </p>
+            <p className="font-semibold text-lg">{userData.friendsCount || 0}</p>
           </div>
         </div>
       </div>
@@ -161,10 +163,22 @@ export default function ProfilePage() {
         <button className="w-full bg-gray-100 text-gray-800 py-3 rounded-2xl font-medium hover:bg-gray-200 hover:scale-[1.01] transition">
           View My Story
         </button>
-        <button className="w-full bg-gray-100 text-gray-800 py-3 rounded-2xl font-medium hover:bg-gray-200 hover:scale-[1.01] transition">
+
+        {/* Add Friends Button */}
+        <button
+          onClick={() => setIsAddFriendOpen(true)}
+          className="w-full bg-gray-100 text-gray-800 py-3 rounded-2xl font-medium hover:bg-gray-200 hover:scale-[1.01] transition"
+        >
           Add Friends
         </button>
       </div>
+
+      {/* AddFriendModal */}
+      <AddFriendModal
+        isOpen={isAddFriendOpen}
+        onClose={() => setIsAddFriendOpen(false)}
+      />
     </div>
   );
 }
+

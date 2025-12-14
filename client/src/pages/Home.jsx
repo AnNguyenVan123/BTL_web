@@ -1,10 +1,10 @@
 import React, { useRef, useState } from "react";
-import CameraStream from "../components/CameraStream";
-import AIFilterCanvas from "../components/AIFilterCanvas";
-import FilterSelector from "../components/FilterSelector";
-import StickerSelector from "../components/StickerSelector";
-import SnapshotVideo from "../components/SnapshotVideo";
-import AdjustmentControls from "../components/AdjustmentControl";
+import CameraStream from "../components/pages/camera/CameraStream";
+import AIFilterCanvas from "../components/pages/camera/AIFilterCanvas";
+import FilterSelector from "../components/pages/camera/FilterSelector";
+import StickerSelector from "../components/pages/camera/StickerSelector";
+import SnapshotVideo from "../components/pages/camera/SnapshotVideo";
+import AdjustmentControls from "../components/pages/camera/AdjustmentControl";
 
 const Home = () => {
   const videoRef = useRef(null);
