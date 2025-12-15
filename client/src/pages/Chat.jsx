@@ -25,6 +25,7 @@ import Header from "../components/pages/chat/main/Header";
 import AddUser from "../components/pages/chat/sidebar/AddUser";
 import CameraModal from "../components/pages/chat/main/CameraModal";
 import SnapViewer from "../components/pages/chat/main/SnapViewer";
+import CameraUI from "../components/pages/chat/main/CameraUI";
 import { useAuth } from "../context/AuthContext";
 
 export default function Chat() {
@@ -200,7 +201,7 @@ export default function Chat() {
     <>
       {close ? (
         <div className="h-screen flex items-center justify-center relative w-full">
-          <div className="blur-container"></div>
+          <CameraUI />
           <AddUser />
         </div>
       ) : (

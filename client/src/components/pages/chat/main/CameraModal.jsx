@@ -1,8 +1,6 @@
 import { useRef, useEffect, useState } from "react";
-import { X, Camera, RefreshCw, Send, Check } from "lucide-react";
-import { Button } from "@/components/ui/button"; // Hoặc component Button của bạn
+import { X, RefreshCw, Send } from "lucide-react";
 
-// Danh sách Filter mẫu
 const FILTERS = [
   { name: "Normal", value: "none", class: "" },
   { name: "B&W", value: "grayscale(100%)", class: "grayscale" },
