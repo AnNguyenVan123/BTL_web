@@ -1,9 +1,10 @@
 import { initializeApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+import { getFirestore, connectFirestoreEmulator } from "firebase/firestore";
 import { getAnalytics, isSupported } from "firebase/analytics";
 import { getStorage } from "firebase/storage";
-import { getDatabase, ref as dbRef } from "firebase/database";
+import { getDatabase } from "firebase/database";
+import { getFunctions, connectFunctionsEmulator } from "firebase/functions";
 
 // Cấu hình Firebase
 const firebaseConfig = {
@@ -31,6 +32,13 @@ const auth = getAuth(app);
 const googleProvider = new GoogleAuthProvider();
 const storage = getStorage();
 
+const functions = getFunctions(app);
+
+if (window.location.hostname === "localhost") {
+  connectFunctionsEmulator(functions, "127.0.0.1", 5001);
+  // connectFirestoreEmulator(db, "127.0.0.1", 8080);
+}
+
 // Analytics (chỉ chạy khi môi trường hỗ trợ)
 isSupported().then((supported) => {
   if (supported) {
@@ -38,4 +46,4 @@ isSupported().then((supported) => {
   }
 });
 
-export { auth, googleProvider, db, storage, rtdb };
+export { auth, googleProvider, db, storage, rtdb, functions };
