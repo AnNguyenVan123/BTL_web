@@ -22,7 +22,6 @@ import {
   limit,
   doc,
   updateDoc,
-  arrayUnion,
   onSnapshot,
   arrayRemove,
 } from "firebase/firestore";
