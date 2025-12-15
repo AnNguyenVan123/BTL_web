@@ -13,3 +13,5 @@ exports.acceptFriendRequest = functions.https.onCall(
 exports.rejectFriendRequest = functions.https.onCall(
   friendController.rejectFriendRequest
 );
+
+exports.blockUser = functions.https.onCall(friendController.blockUser);

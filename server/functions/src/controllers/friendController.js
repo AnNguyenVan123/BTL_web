@@ -168,6 +168,14 @@ exports.acceptFriendRequest = async (request) => {
     t.update(partnerRef, {
       sentRequests: FieldValue.arrayRemove(myUid),
     });
+
+    t.update(myRef, {
+      friends: FieldValue.arrayUnion(partnerUid),
+    });
+
+    t.update(partnerRef, {
+      friends: FieldValue.arrayUnion(myUid),
+    });
   });
 
   return { success: true };
@@ -212,6 +220,53 @@ exports.rejectFriendRequest = async (request) => {
     });
 
     t.update(partnerRef, {
+      sentRequests: FieldValue.arrayRemove(myUid),
+    });
+  });
+
+  return { success: true };
+};
+
+// --- API 4: Block User ---
+exports.blockUser = async (request) => {
+  const auth = request.auth;
+  const data = request.data;
+
+  if (!auth) throw new HttpsError("unauthenticated", "Login required.");
+
+  const myUid = auth.uid;
+  const targetUid = data.targetUid;
+
+  const myRef = db.collection("users").doc(myUid);
+  const targetRef = db.collection("users").doc(targetUid);
+
+  await db.runTransaction(async (t) => {
+    const myDoc = await t.get(myRef);
+    const targetDoc = await t.get(targetRef);
+
+    if (!myDoc.exists || !targetDoc.exists) {
+      throw new HttpsError("not-found", "User not found");
+    }
+
+    const myData = myDoc.data();
+
+    t.update(myRef, {
+      blocked: FieldValue.arrayUnion(targetUid),
+      friends: FieldValue.arrayRemove(targetUid),
+      sentRequests: FieldValue.arrayRemove(targetUid),
+    });
+
+    const requestObject = (myData.friendRequests || []).find(
+      (req) => req.uid === targetUid
+    );
+    if (requestObject) {
+      t.update(myRef, {
+        friendRequests: FieldValue.arrayRemove(requestObject),
+      });
+    }
+
+    t.update(targetRef, {
+      friends: FieldValue.arrayRemove(myUid),
       sentRequests: FieldValue.arrayRemove(myUid),
     });
   });

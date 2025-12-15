@@ -44,7 +44,7 @@ export default function AddUser() {
   // State dữ liệu User
   const [friendIds, setFriendIds] = useState(new Set());
   const [blockedIds, setBlockedIds] = useState(new Set());
-  const [sentRequests, setSentRequests] = useState(new Set()); // YÊU CẦU 2: State lưu danh sách "Sent"
+  const [sentRequests, setSentRequests] = useState(new Set());
   const [friendRequests, setFriendRequests] = useState([]);
 
   // --- 1. HANDLE SEARCH ---
@@ -107,7 +107,6 @@ export default function AddUser() {
       await updateDoc(doc(db, "users", user.uid), {
         sentRequests: arrayRemove(receiverUid),
       });
-      // Cần xóa bên kia nữa...
       message.info("Request canceled");
     } catch (e) {
       message.error("Error");
@@ -144,12 +143,13 @@ export default function AddUser() {
 
   const handleBlock = async (targetUid) => {
     try {
-      await updateDoc(doc(db, "users", user.uid), {
-        blocked: arrayUnion(targetUid),
-      });
-      message.success("User blocked");
+      const blockFn = httpsCallable(functions, "blockUser");
+      await blockFn({ targetUid });
+
+      message.success("User blocked successfully");
     } catch (err) {
-      message.error("Failed to block");
+      console.error(err);
+      message.error(err.message || "Failed to block user");
     }
   };
 
