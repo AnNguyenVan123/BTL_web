@@ -16,7 +16,7 @@ export default function ProfilePage() {
   const { user, setUser } = useAuth();
   const [userData, setUserData] = useState(null);
   const navigate = useNavigate();
-  const [isAddFriendOpen, setIsAddFriendOpen] = useState(false); // <-- modal state
+  const [isAddFriendOpen, setIsAddFriendOpen] = useState(false);
 
   const handleChangeAvatar = async (file) => {
     if (!file) return;
@@ -52,7 +52,8 @@ export default function ProfilePage() {
   }, [user]);
 
   const handleCopyProfileLink = async () => {
-    const link = typeof window !== "undefined" ? window.location.href : `/profile`;
+    const link =
+      typeof window !== "undefined" ? window.location.href : `/profile`;
     try {
       await navigator.clipboard.writeText(link);
       message.success("Profile link copied!");
@@ -71,7 +72,8 @@ export default function ProfilePage() {
     }
   };
 
-  if (!user) return <p className="text-center mt-10">⚠️ You are not logged in.</p>;
+  if (!user)
+    return <p className="text-center mt-10">⚠️ You are not logged in.</p>;
   if (!userData) return <p className="text-center mt-10">Loading...</p>;
 
   return (
@@ -140,7 +142,9 @@ export default function ProfilePage() {
               <Users className="w-6 h-6 text-blue-500 mx-auto" />
             </div>
             <p className="text-sm text-gray-500 mt-1">Friends</p>
-            <p className="font-semibold text-lg">{userData.friendsCount || 0}</p>
+            <p className="font-semibold text-lg">
+              {userData.friendsCount || 0}
+            </p>
           </div>
         </div>
       </div>
@@ -181,4 +185,3 @@ export default function ProfilePage() {
     </div>
   );
 }
-
