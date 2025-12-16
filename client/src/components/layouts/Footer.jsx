@@ -48,12 +48,12 @@ export default function Footer() {
           </div>
         </div>
         <div>
-          <Select value={"English"}>
-            <Option>English</Option>
-            <Option>Vietnamese</Option>
+          <Select value={"English"} className="w-full md:w-auto">
+            <Select.Option value="en">English</Select.Option>
+            <Select.Option value="vi">Vietnamese</Select.Option>
           </Select>
         </div>
-        <div className="text-sm text-[#92989F]">
+        <div className="text-xs md:text-sm text-[#92989F] text-center md:text-left">
           Designed by © Group 1 2025. All right reserved
         </div>
       </div>
