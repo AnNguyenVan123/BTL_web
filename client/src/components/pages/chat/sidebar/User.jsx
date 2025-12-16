@@ -3,7 +3,7 @@ import { ChatContext } from "../../../../context/ChatContext";
 
 import { CameraOutlined } from "@ant-design/icons";
 
-export default function UserChat({ receiver, chat }) {
+export default function UserChat({ receiver, chat, isGroup }) {
   const { setClose, setSelectedChatId, setReceiver } = useContext(ChatContext);
 
   return (
