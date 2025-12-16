@@ -8,7 +8,7 @@ import {
   SmileOutlined,
   FileImageOutlined,
 } from "@ant-design/icons";
-import { Input, Image } from "antd";
+import { Input, Image, Avatar } from "antd";
 
 import { storage, db } from "../lib/firebase";
 import {
@@ -35,13 +35,46 @@ export default function Chat() {
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [viewingSnap, setViewingSnap] = useState(null);
+  const [chatMetadata, setChatMetadata] = useState(null);
+  const [memberDetails, setMemberDetails] = useState({});
+
   const inputRef = useRef(null);
 
   const { user } = useAuth();
 
+  // --- Helpers: Xác định thông tin hiển thị Header ---
+  // Nếu là Group: Lấy tên nhóm. Nếu là 1-1: Lấy từ receiver context
+  const getChatInfo = () => {
+    if (chatMetadata?.type === "group") {
+      return {
+        displayName: chatMetadata.groupName || "Unnamed Group",
+        photoURL: chatMetadata.groupPhoto || "/default-avatar.png",
+        uid: selectedChatId,
+        isGroup: true,
+      };
+    }
+    // Fallback cho chat 1-1
+    return receiver;
+  };
+
+  const currentChatInfo = getChatInfo();
+
+  // --- Helpers: Lấy danh sách ID cần update UserChats ---
+  const getRecipientsForUpdate = () => {
+    if (chatMetadata?.type === "group") {
+      // Nếu là group, update cho tất cả thành viên
+      return chatMetadata.members || [];
+    }
+    // Nếu là 1-1
+    return [user.uid, receiver?.uid].filter(Boolean);
+  };
+
   // Hàm khi bấm vào nút "Tap to view"
   const handleOpenSnap = (message) => {
-    if (message.isViewed) return;
+    const isViewedByMe =
+      message.viewedBy && message.viewedBy.includes(user.uid);
+    if (isViewedByMe) return;
+
     setViewingSnap(message);
   };
 
@@ -62,7 +95,14 @@ export default function Chat() {
 
         const updatedMessages = data.messages.map((msg) => {
           if (msg.id === messageToBurn.id) {
-            return { ...msg, isViewed: true, img: null };
+            const currentViewedBy = msg.viewedBy || [];
+            const newViewedBy = currentViewedBy.includes(user.uid)
+              ? currentViewedBy
+              : [...currentViewedBy, user.uid];
+            return {
+              ...msg,
+              viewedBy: newViewedBy,
+            };
           }
           return msg;
         });
@@ -80,17 +120,13 @@ export default function Chat() {
     try {
       console.log("Đang upload ảnh...");
 
-      // Tạo tên file unique
       const imageId = uuidv4();
       const storageRef = ref(storage, `snaps/${imageId}.png`);
 
-      // Upload Base64 lên Firebase Storage
       await uploadString(storageRef, imageBase64, "data_url");
 
-      // Lấy URL tải xuống
       const downloadURL = await getDownloadURL(storageRef);
 
-      // Tạo object tin nhắn
       const messageId = uuidv4();
       const newMessage = {
         id: messageId,
@@ -98,17 +134,15 @@ export default function Chat() {
         text: "Sent a Snap",
         img: downloadURL,
         type: "snap",
-        isViewed: false,
+        viewedBy: [],
         createdAt: new Date(),
       };
 
-      // 5. Update vào Firestore (chat room)
       await updateDoc(doc(db, "chats", selectedChatId), {
         messages: arrayUnion(newMessage),
       });
 
-      // 6. Update Last Message cho UserChats (Sidebar)
-      const userIds = [user.uid, receiver.uid];
+      const userIds = getRecipientsForUpdate();
       userIds.forEach(async (id) => {
         const userChatsRef = doc(db, "userchats", id);
         const userChatsSnapshot = await getDoc(userChatsRef);
@@ -141,7 +175,6 @@ export default function Chat() {
 
   const handleSend = async () => {
     if (!text || !text.trim()) return;
-    console.log("Send message:", text);
     inputRef.current.input.value = "";
     setText("");
     setShowEmojiPicker(false);
@@ -154,8 +187,7 @@ export default function Chat() {
         }),
       });
 
-      const userIds = [user.uid, receiver.uid];
-
+      const userIds = getRecipientsForUpdate();
       userIds.forEach(async (id) => {
         const userChatsRef = doc(db, "userchats", id);
         const userChatsSnapshot = await getDoc(userChatsRef);
@@ -185,17 +217,51 @@ export default function Chat() {
     if (!selectedChatId) return;
 
     const chatDocRef = doc(db, "chats", selectedChatId);
-    const unSub = onSnapshot(chatDocRef, (docSnap) => {
-      if (!docSnap.exists()) {
-        setMessages([]);
-        return;
+
+    const unSub = onSnapshot(
+      chatDocRef,
+      (docSnap) => {
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          setMessages(data.messages || []);
+          setChatMetadata(data);
+        } else {
+          setMessages([]);
+          setChatMetadata(null);
+        }
+      },
+      (error) => {
+        console.error("Firestore Error:", error);
       }
-      const data = docSnap.data();
-      setMessages(data.messages || []);
-    });
+    );
 
     return () => unSub();
   }, [selectedChatId]);
+
+  useEffect(() => {
+    if (!chatMetadata?.members) return;
+
+    const fetchMembers = async () => {
+      const details = {};
+
+      // Lấy thông tin cho tất cả thành viên trong mảng members
+      const promises = chatMetadata.members.map(async (uid) => {
+        try {
+          const userDoc = await getDoc(doc(db, "users", uid));
+          if (userDoc.exists()) {
+            details[uid] = userDoc.data();
+          }
+        } catch (error) {
+          console.error("Error fetching member:", uid);
+        }
+      });
+
+      await Promise.all(promises);
+      setMemberDetails(details);
+    };
+
+    fetchMembers();
+  }, [chatMetadata]);
 
   return (
     <>
@@ -208,7 +274,7 @@ export default function Chat() {
         <div className="h-screen relative">
           <AddUser />
           <div className="p-2 bg-[#121212] h-full flex flex-col">
-            <Header setClose={setClose} receiver={receiver} />
+            <Header setClose={setClose} receiver={currentChatInfo} />
             <div className="p-3 border-gray-700 rounded-2xl bg-[#1E1E1E] h-full flex flex-col">
               <div className="flex-1 overflow-y-auto">
                 {!selectedChatId ? (
@@ -220,66 +286,104 @@ export default function Chat() {
                     {messages.length === 0 ? (
                       <div className="text-gray-400">No messages yet</div>
                     ) : (
-                      messages.map((m, i) => (
-                        <div
-                          key={i}
-                          className={`p-2 rounded ${
-                            m.senderId === user.uid
-                              ? "bg-blue-600 text-white self-end"
-                              : "bg-gray-700 text-white self-start"
-                          }`}
-                        >
-                          {m.type === "snap" ? (
-                            <div className="flex flex-col gap-1">
-                              {m.isViewed ? (
-                                <div
-                                  className={`flex items-center gap-2 px-3 py-2 rounded border ${
-                                    m.senderId === user.uid
-                                      ? "border-blue-500/30 bg-blue-900/20"
-                                      : "border-gray-600 bg-gray-800"
-                                  }`}
-                                >
-                                  <span className="text-lg">🔥</span>
-                                  <span className="text-gray-400 text-sm italic">
-                                    {m.senderId === user.uid
-                                      ? "Opened"
-                                      : "Expired"}
-                                  </span>
-                                </div>
-                              ) : (
-                                <>
-                                  {m.senderId === user.uid ? (
-                                    <div className="bg-blue-600/20 p-2 rounded-lg border border-blue-500/50">
-                                      <Image
-                                        width={150}
-                                        src={m.img}
-                                        className="rounded-lg object-cover"
-                                        alt="My Snap"
-                                      />
-                                      <div className="text-right text-[10px] text-blue-300 mt-1 font-bold uppercase tracking-wider">
-                                        Snap Delivered
-                                      </div>
-                                    </div>
-                                  ) : (
-                                    <div
-                                      onClick={() => handleOpenSnap(m)}
-                                      className="cursor-pointer font-bold py-2 px-4 rounded transition-all flex items-center gap-2 shadow-lg bg-linear-to-r from-red-500 to-pink-500 hover:from-red-600 hover:to-pink-600 text-white animate-pulse"
-                                    >
-                                      <span>📸</span>
-                                      <span>Tap to View Snap</span>
-                                    </div>
-                                  )}
-                                </>
+                      messages.map((m, i) => {
+                        const isOwner = m.senderId === user.uid;
+                        const senderInfo = memberDetails[m.senderId];
+                        const isViewedByMe =
+                          m.viewedBy && m.viewedBy.includes(user.uid);
+                        return (
+                          <div
+                            key={i}
+                            className={`flex gap-2 max-w-[80%] ${
+                              isOwner
+                                ? "self-end flex-row-reverse"
+                                : "self-start"
+                            }`}
+                          >
+                            <Avatar
+                              src={
+                                senderInfo?.photoURL || "/default-avatar.png"
+                              }
+                              size={32}
+                              className="shrink-0"
+                            />
+                            <div
+                              className={`flex flex-col ${
+                                isOwner ? "items-end" : "items-start"
+                              }`}
+                            >
+                              {/* Display Name - Chỉ hiện nếu không phải là mình */}
+                              {!isOwner && (
+                                <span className="text-gray-400 text-[10px] ml-1 mb-1 font-semibold">
+                                  {senderInfo?.displayName || "Member"}
+                                </span>
                               )}
+
+                              {/* Message Bubble / Snap Bubble */}
+                              <div
+                                className={`p-2 rounded-xl ${
+                                  isOwner
+                                    ? "bg-blue-600 text-white"
+                                    : "bg-gray-700 text-white"
+                                }`}
+                              >
+                                {m.type === "snap" ? (
+                                  <div className="flex flex-col gap-1">
+                                    {/* 2. LOGIC RENDER: Dùng biến isViewedByMe thay vì m.isViewed */}
+                                    {isViewedByMe ? (
+                                      <div
+                                        className={`flex items-center gap-2 px-3 py-2 rounded border ${
+                                          isOwner
+                                            ? "border-blue-500/30 bg-blue-900/20"
+                                            : "border-gray-600 bg-gray-800"
+                                        }`}
+                                      >
+                                        <span className="text-lg">🔥</span>
+                                        <span className="text-gray-400 text-sm italic">
+                                          {/* Nếu là của mình gửi: Hiện "Opened"
+                                                Nếu của người khác gửi: Hiện "Expired" */}
+                                          {isOwner ? "Opened" : "Expired"}
+                                        </span>
+                                      </div>
+                                    ) : (
+                                      // TRƯỜNG HỢP CHƯA XEM (HOẶC MÌNH LÀ NGƯỜI GỬI)
+                                      <>
+                                        {isOwner ? (
+                                          <div className="bg-blue-600/20 p-2 rounded-lg border border-blue-500/50">
+                                            <Image
+                                              width={150}
+                                              src={m.img}
+                                              className="rounded-lg object-cover"
+                                              alt="My Snap"
+                                            />
+                                            <div className="text-right text-[10px] text-blue-300 mt-1 font-bold uppercase tracking-wider">
+                                              Snap Delivered
+                                            </div>
+                                          </div>
+                                        ) : (
+                                          <div
+                                            onClick={() => handleOpenSnap(m)}
+                                            className="cursor-pointer font-bold py-2 px-4 rounded transition-all flex items-center gap-2 shadow-lg bg-linear-to-r from-red-500 to-pink-500 hover:from-red-600 hover:to-pink-600 text-white animate-pulse"
+                                          >
+                                            <span>📸</span>
+                                            <span>Tap to View Snap</span>
+                                          </div>
+                                        )}
+                                      </>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <div className="text-sm">{m.text}</div>
+                                )}
+                              </div>
+                              <div className="text-xs text-gray-300 mt-1">
+                                {m.createdAt?.toDate?.().toLocaleString?.() ||
+                                  ""}
+                              </div>
                             </div>
-                          ) : (
-                            <div className="text-sm">{m.text}</div>
-                          )}
-                          <div className="text-xs text-gray-300 mt-1">
-                            {m.createdAt?.toDate?.().toLocaleString?.() || ""}
                           </div>
-                        </div>
-                      ))
+                        );
+                      })
                     )}
                   </div>
                 )}

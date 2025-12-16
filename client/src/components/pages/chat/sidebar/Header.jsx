@@ -11,7 +11,8 @@ import { Logo } from "../../../layouts/Logo";
 import { ChatContext } from "../../../../context/ChatContext";
 
 export default function Header() {
-  const { toggleAddUser, setToggleAddUser } = useContext(ChatContext);
+  const { toggleAddUser, setToggleAddUser, showNewChat, setShowNewChat } =
+    useContext(ChatContext);
   return (
     <>
       <div className="flex justify-around items-center max-h-[61px] h-1/6 border border-b-gray-700">
@@ -24,8 +25,18 @@ export default function Header() {
           >
             <UserAddOutlined style={{ color: "white", fontSize: 18 }} />
           </div>
-          <div className="rounded-full bg-[#0FADFF] w-8 h-8 grid place-content-center cursor-pointer">
-            <MessageOutlined style={{ color: "white", fontSize: 18 }} />
+          <div
+            className={`rounded-full w-8 h-8 grid place-content-center cursor-pointer transition
+                        ${
+                          showNewChat
+                            ? "bg-white"
+                            : "bg-[#0FADFF] hover:bg-[#0c8ecc]"
+                        }`}
+            onClick={() => setShowNewChat(!showNewChat)}
+          >
+            <MessageOutlined
+              style={{ color: showNewChat ? "#0FADFF" : "white", fontSize: 18 }}
+            />
           </div>
         </div>
       </div>

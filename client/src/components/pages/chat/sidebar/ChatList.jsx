@@ -10,11 +10,36 @@ export default function ChatList() {
     const unSub = onSnapshot(doc(db, "userchats", user?.uid), async (res) => {
       const items = res.data().chats;
       const promises = items.map(async (item) => {
-        const userDocRef = doc(db, "users", item.receiverId);
-        const userDocSnap = await getDoc(userDocRef);
+        if (item.type === "group") {
+          return {
+            ...item,
+            receiver: {
+              uid: item.chatId,
+              displayName: item.displayName || "Unknown Group",
+              photoURL: item.photoURL || "/default-avatar.png",
+            },
+            isGroup: true,
+          };
+        } else {
+          try {
+            const userDocRef = doc(db, "users", item.receiverId);
+            const userDocSnap = await getDoc(userDocRef);
+            const userData = userDocSnap.data();
 
-        const receiver = userDocSnap.data();
-        return { ...item, receiver };
+            return {
+              ...item,
+              receiver: userData || {},
+              isGroup: false,
+            };
+          } catch (err) {
+            console.error("Error fetching user:", err);
+            return {
+              ...item,
+              receiver: { displayName: "User Deleted" },
+              isGroup: false,
+            };
+          }
+        }
       });
       const chatData = await Promise.all(promises);
       setChats(chatData.sort((a, b) => b.updateAt - a.updateAt));
@@ -28,7 +53,12 @@ export default function ChatList() {
     <>
       <div className="flex flex-col gap-3">
         {chats?.map((chat, idx) => (
-          <UserChat key={idx} receiver={chat?.receiver} chat={chat} />
+          <UserChat
+            key={idx}
+            receiver={chat?.receiver}
+            chat={chat}
+            isGroup={chat.isGroup}
+          />
         ))}
       </div>
     </>

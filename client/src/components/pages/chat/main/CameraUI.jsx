@@ -131,10 +131,17 @@ const CameraUI = () => {
           messages: arrayUnion(newMessage),
         });
 
-        const userIds = [user.uid, receiver.uid];
-
+        let recipientIds = [];
+        if (receiver.isGroup) {
+          // Nếu là group, update cho tất cả thành viên trong group đó (cần fetch members từ chat doc hoặc lưu sẵn)
+          // Để đơn giản và nhanh, ta lấy members từ object receiver đã chuẩn bị ở useEffect
+          recipientIds = receiver.members || [];
+        } else {
+          // Nếu là chat 1-1
+          recipientIds = [user.uid, receiver.uid];
+        }
         await Promise.all(
-          userIds.map(async (id) => {
+          recipientIds.map(async (id) => {
             const userChatsRef = doc(db, "userchats", id);
             const userChatsSnapshot = await getDoc(userChatsRef);
 
@@ -175,7 +182,9 @@ const CameraUI = () => {
   };
 
   const filteredFriends = friends.filter((f) =>
-    f.displayName?.toLowerCase().includes(searchText.toLowerCase())
+    (f.displayName || "")
+      .toLowerCase()
+      .includes((searchText || "").toLowerCase())
   );
 
   useEffect(() => {
@@ -192,21 +201,55 @@ const CameraUI = () => {
 
     const unsub = onSnapshot(doc(db, "userchats", user.uid), async (res) => {
       const data = res.data();
+      const chatsArray = data.chats || [];
 
-      if (data?.chats) {
-        const promises = data.chats.map(async (chatItem) => {
-          const userDoc = await getDoc(doc(db, "users", chatItem.receiverId));
-          if (userDoc.exists()) {
-            return {
-              uid: chatItem.receiverId,
-              chatId: chatItem.chatId,
-              ...userDoc.data(),
-            };
+      if (chatsArray.length > 0) {
+        const promises = chatsArray.map(async (chatItem) => {
+          // CASE 1: GROUP CHAT -> Dùng luôn data có sẵn
+          if (chatItem.type === "group") {
+            try {
+              const chatRoomSnap = await getDoc(
+                doc(db, "chats", chatItem.chatId)
+              );
+              const chatRoomData = chatRoomSnap.exists()
+                ? chatRoomSnap.data()
+                : {};
+
+              return {
+                uid: chatItem.chatId,
+                chatId: chatItem.chatId,
+                displayName: chatItem.displayName || "Group",
+                photoURL: chatItem.photoURL,
+                isGroup: true,
+                members: chatRoomData.members || [],
+              };
+            } catch (e) {
+              return null;
+            }
           }
-          return null;
+          // CASE 2: SINGLE CHAT -> Fetch User Info
+          else {
+            try {
+              const userDoc = await getDoc(
+                doc(db, "users", chatItem.receiverId)
+              );
+              if (userDoc.exists()) {
+                return {
+                  uid: chatItem.receiverId,
+                  chatId: chatItem.chatId,
+                  ...userDoc.data(),
+                  isGroup: false,
+                };
+              }
+            } catch (e) {
+              console.error("User fetch error", e);
+            }
+            return null;
+          }
         });
 
         const resolvedFriends = await Promise.all(promises);
+        // Lọc bỏ các item null
         setFriends(resolvedFriends.filter((f) => f !== null));
       }
     });
