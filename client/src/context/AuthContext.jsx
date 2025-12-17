@@ -17,39 +17,49 @@ export function AuthProvider({ children }) {
 
   // Hàm đồng bộ dữ liệu user với Firestore
   const syncUserData = async (firebaseUser) => {
-    if (!firebaseUser) return;
+    if (!firebaseUser || !db) return;
 
-    const userRef = doc(db, "users", firebaseUser.uid);
-    const existingDoc = await getDoc(userRef);
+    try {
+      const userRef = doc(db, "users", firebaseUser.uid);
+      const existingDoc = await getDoc(userRef);
 
-    if (existingDoc.exists()) {
-      // Nếu user đã có trong Firestore → chỉ cập nhật lastLogin
-      await setDoc(
-        userRef,
-        {
+      if (existingDoc.exists()) {
+        // Nếu user đã có trong Firestore → chỉ cập nhật lastLogin
+        await setDoc(
+          userRef,
+          {
+            lastLogin: serverTimestamp(),
+          },
+          { merge: true }
+        );
+      } else {
+        // Nếu user mới → tạo bản ghi mới
+        await setDoc(userRef, {
+          uid: firebaseUser.uid,
+          email: firebaseUser.email,
+          displayName: firebaseUser.displayName || "",
+          photoURL: firebaseUser.photoURL || "",
+          createdAt: serverTimestamp(),
           lastLogin: serverTimestamp(),
-        },
-        { merge: true }
-      );
-    } else {
-      // Nếu user mới → tạo bản ghi mới
-      await setDoc(userRef, {
-        uid: firebaseUser.uid,
-        email: firebaseUser.email,
-        displayName: firebaseUser.displayName || "",
-        photoURL: firebaseUser.photoURL || "",
-        createdAt: serverTimestamp(),
-        lastLogin: serverTimestamp(),
-      });
+        });
 
-      await setDoc(doc(db, "userchats", firebaseUser.uid), {
-        chats: [],
-      });
+        await setDoc(doc(db, "userchats", firebaseUser.uid), {
+          chats: [],
+        });
+      }
+    } catch (error) {
+      console.error("Error syncing user data:", error);
     }
   };
 
   // Lắng nghe trạng thái đăng nhập
   useEffect(() => {
+    if (!auth) {
+      // Firebase không cấu hình → set loading false để app vẫn load
+      setLoading(false);
+      return;
+    }
+
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
       if (currentUser) {
@@ -62,6 +72,9 @@ export function AuthProvider({ children }) {
 
   // Đăng nhập bằng Google
   const loginWithGoogle = async () => {
+    if (!auth || !googleProvider) {
+      throw new Error("Firebase is not configured");
+    }
     const result = await signInWithPopup(auth, googleProvider);
     await syncUserData(result.user);
     setUser(result.user);
@@ -70,6 +83,9 @@ export function AuthProvider({ children }) {
 
   // Đăng ký bằng email
   const signupWithEmail = async (email, password) => {
+    if (!auth) {
+      throw new Error("Firebase is not configured");
+    }
     const result = await createUserWithEmailAndPassword(auth, email, password);
     await syncUserData(result.user);
     setUser(result.user);
@@ -78,6 +94,9 @@ export function AuthProvider({ children }) {
 
   // Đăng nhập bằng email
   const loginWithEmail = async (email, password) => {
+    if (!auth) {
+      throw new Error("Firebase is not configured");
+    }
     const result = await signInWithEmailAndPassword(auth, email, password);
     await syncUserData(result.user);
     setUser(result.user);
@@ -86,6 +105,10 @@ export function AuthProvider({ children }) {
 
   // Đăng xuất
   const logout = async () => {
+    if (!auth) {
+      setUser(null);
+      return;
+    }
     await signOut(auth);
     setUser(null);
   };

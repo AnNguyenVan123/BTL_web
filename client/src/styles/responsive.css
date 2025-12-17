@@ -1,0 +1,52 @@
+/* Responsive helper overrides for small/medium screens */
+
+/* Header layout: switch grid columns at smaller screens */
+header {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+}
+
+/* Default search width (kept as baseline) */
+#header-search {
+  width: 180px;
+  box-sizing: border-box;
+}
+
+/* Middle feature bar: allow wrapping and smaller gaps */
+#header-features {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 2rem;
+  justify-content: center;
+}
+
+/* Breakpoints */
+@media (max-width: 1024px) {
+  #header-search { width: 140px; }
+  #header-features { gap: 1rem; max-width: 320px; }
+}
+
+@media (max-width: 768px) {
+  /* On small screens reduce header to two columns (logo+search and user), hide large feature group */
+  header { grid-template-columns: 1fr auto; padding: 0.5rem 0.75rem; }
+  #header-features { display: none !important; }
+  #header-search { width: 110px; }
+  /* Align user section to the right and reduce padding */
+  .place-self-end { place-self: end center; padding-right: 0.5rem; }
+  /* Make header avatar/name more compact */
+  .place-self-end .ant-avatar { width: 32px; height: 32px; }
+  .place-self-end span { display: none; }
+}
+
+@media (max-width: 480px) {
+  #header-search { width: 90px; }
+  header { grid-template-columns: auto 1fr; gap: 0.5rem; }
+}
+
+/* Chat layout: ensure video/grid tiles scale on narrow screens */
+.chat-bg { width: 100%; height: 100%; object-fit: cover; }
+
+/* General helpers */
+.responsive-hide-sm { display: none; }
+@media (min-width: 769px) { .responsive-hide-sm { display: initial; } }
