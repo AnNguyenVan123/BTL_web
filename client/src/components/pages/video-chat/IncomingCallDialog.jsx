@@ -1,11 +1,10 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ref, onValue, remove } from "firebase/database";
-import { rtdb } from "../../../lib/firebase";
 import { useAuth } from "../../../context/AuthContext";
 import { motion, AnimatePresence } from "framer-motion";
 import { Phone, PhoneOff, Video } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { websocketService } from "../../../lib/websocket";
 
 const IncomingCallDialog = () => {
   const { user } = useAuth();
@@ -13,41 +12,79 @@ const IncomingCallDialog = () => {
   const [callData, setCallData] = useState(null);
 
   useEffect(() => {
-    if (!user?.uid) return;
+    if (!user?.uid) {
+      console.log("⚠️ [IncomingCallDialog] No user, skipping setup");
+      return;
+    }
 
-    const callRef = ref(rtdb, `users/${user.uid}/incomingCall`);
+    console.log(`✅ [IncomingCallDialog] Setting up for user ${user.uid}`);
 
-    const unsubscribe = onValue(callRef, (snapshot) => {
-      const data = snapshot.val();
-      if (data) {
-        setCallData(data);
-        // Có thể thêm nhạc chuông ở đây (Audio.play())
-      } else {
-        setCallData(null);
+    const setupIncomingCall = async () => {
+      try {
+        if (!websocketService.isConnected) {
+          console.log(
+            `🔄 [IncomingCallDialog] Checking WebSocket connection...`
+          );
+          console.log(
+            `🔄 [IncomingCallDialog] WebSocket not connected, connecting...`
+          );
+          await websocketService.connect();
+        } else {
+          console.log(`✅ [IncomingCallDialog] WebSocket connected`);
+        }
+        console.log(`✅ [IncomingCallDialog] WebSocket already connected`);
+
+        console.log(
+          `👂 [IncomingCallDialog] Setting up incoming-call listener`
+        );
+        const unsubscribeIncomingCall = websocketService.onIncomingCall(
+          (data) => {
+            setCallData({
+              callerId: data.callerId,
+              callerName: data.callerName,
+              callerPhoto: data.callerPhoto,
+              roomId: data.roomId,
+              timestamp: data.timestamp,
+            });
+          }
+        );
+
+        console.log(`✅ [IncomingCallDialog] Listener setup complete`);
+        return unsubscribeIncomingCall;
+      } catch (error) {
+        return () => {};
       }
+    };
+
+    let cleanup = null;
+    setupIncomingCall().then((unsub) => {
+      cleanup = unsub;
     });
 
-    return () => unsubscribe();
+    return () => {
+      if (cleanup) cleanup();
+    };
   }, [user]);
 
   const handleAccept = async () => {
     if (!callData || !user?.uid) return;
 
     const roomId = callData.roomId;
-
-    const callRef = ref(rtdb, `users/${user.uid}/incomingCall`);
-    await remove(callRef);
+    setCallData(null);
 
     navigate(`/video-chat?id=${roomId}`);
   };
 
   const handleDecline = async () => {
-    if (!user?.uid) return;
+    if (!user?.uid || !callData) return;
 
-    // Xóa thông báo trên Firebase
-    const callRef = ref(rtdb, `users/${user.uid}/incomingCall`);
-    await remove(callRef);
+    setCallData(null);
   };
+
+  // Debug: log callData changes
+  useEffect(() => {
+    console.log("🔍 [IncomingCallDialog] callData state:", callData);
+  }, [callData]);
 
   return (
     <AnimatePresence>
@@ -57,6 +94,7 @@ const IncomingCallDialog = () => {
           animate={{ y: 0, opacity: 1 }}
           exit={{ y: -100, opacity: 0 }}
           className="fixed top-4 right-4 z-50 w-full max-w-sm"
+          style={{ zIndex: 9999 }}
         >
           <div className="bg-white/90 backdrop-blur-md border-2 border-yellow-400 rounded-2xl shadow-2xl p-4 overflow-hidden">
             <div className="flex items-center gap-4 mb-4">

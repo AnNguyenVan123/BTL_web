@@ -12,7 +12,6 @@ import {
   Camera as CameraIcon,
 } from "lucide-react";
 
-// Import Components con
 import ARView from "../camera/ARView";
 import SendModal from "../camera/SendModal";
 
@@ -25,9 +24,8 @@ const FILTERS = [
 
 const CameraUI = () => {
   const { user } = useAuth();
-  const arViewRef = useRef(); // Ref để gọi hàm capture của con
+  const arViewRef = useRef();
 
-  // UI State
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [capturedImage, setCapturedImage] = useState(null);
   const [isFrontCamera, setIsFrontCamera] = useState(true);
@@ -35,7 +33,6 @@ const CameraUI = () => {
   const [filter, setFilter] = useState("none");
   const [showSendModal, setShowSendModal] = useState(false);
 
-  // Actions
   const handleCapture = () => {
     if (arViewRef.current) {
       const image = arViewRef.current.capture();

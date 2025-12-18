@@ -1,5 +1,4 @@
 import { useState, useEffect, useContext } from "react";
-import axios from "axios";
 import {
   UsergroupAddOutlined,
   CloseOutlined,
@@ -10,9 +9,9 @@ import { db } from "../../../../lib/firebase";
 import { doc, getDoc, onSnapshot } from "firebase/firestore";
 import { useAuth } from "../../../../context/AuthContext";
 import { ChatContext } from "../../../../context/ChatContext";
+import { apiService } from "../../../../lib/api";
 
 const NewChatPanel = () => {
-  const API_URL = "http://127.0.0.1:5001/snapchat-378cb/us-central1/api";
   const { user } = useAuth();
   const { setShowNewChat, setSelectedChatId, setReceiver, setClose } =
     useContext(ChatContext);
@@ -53,7 +52,6 @@ const NewChatPanel = () => {
       setShowNewChat(false);
       setClose(false);
     } else {
-      console.log("Chưa có chat, cần tạo mới trên Firestore...");
     }
   };
 
@@ -61,42 +59,22 @@ const NewChatPanel = () => {
     if (selectedUsers.length === 0) return;
     if (!groupName.trim()) {
       message.warning("Vui lòng nhập tên nhóm!");
-      console.log("vui lòng nhập tên nhóm");
       return;
     }
 
     setLoading(true);
     try {
-      const token = await user.getIdToken();
+      const response = await apiService.createGroup(selectedUsers, groupName);
+      const { chatId } = response;
 
-      const response = await axios.post(
-        `${API_URL}/chat/create-group`,
-        {
-          currentUserId: user.uid,
-          selectedUsers: selectedUsers,
-          groupName: groupName,
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-
-      const { chatId } = response.data;
-
-      console.log("Group created via API:", chatId);
 
       setSelectedChatId(chatId);
       setShowNewChat(false);
       setClose(false);
       message.success("Tạo nhóm thành công!");
     } catch (error) {
-      console.log("Status:", error.response?.status);
-      console.log("Data:", error.response?.data);
-      console.log("Full Error:", error);
-
-      message.error(error.response?.data?.error || "Lỗi không xác định");
+      console.error("Error creating group:", error);
+      message.error(error.message || "Lỗi không xác định");
     } finally {
       setLoading(false);
     }
