@@ -30,7 +30,6 @@ const CameraModal = ({ isOpen, onClose, onSendImage }) => {
   const [selectedFilter, setSelectedFilter] = useState(FILTERS[0]);
   const [isFrontCamera, setIsFrontCamera] = useState(true);
 
-  // 1. Khởi động Camera khi Modal mở
   useEffect(() => {
     let currentStream = null;
 
@@ -40,7 +39,7 @@ const CameraModal = ({ isOpen, onClose, onSendImage }) => {
           const constraints = {
             video: {
               facingMode: isFrontCamera ? "user" : "environment",
-              width: { ideal: 720 }, // Độ phân giải tối ưu cho khung dọc
+              width: { ideal: 720 },
               height: { ideal: 1280 },
             },
             audio: false,
@@ -60,7 +59,6 @@ const CameraModal = ({ isOpen, onClose, onSendImage }) => {
 
     startCamera();
 
-    // Cleanup: Tắt camera khi đóng modal hoặc unmount
     return () => {
       if (currentStream) {
         currentStream.getTracks().forEach((track) => track.stop());
@@ -68,23 +66,19 @@ const CameraModal = ({ isOpen, onClose, onSendImage }) => {
     };
   }, [isOpen, capturedImage, isFrontCamera]);
 
-  // 2. Hàm chụp ảnh
   const takePhoto = () => {
     if (videoRef.current && canvasRef.current) {
       const video = videoRef.current;
       const canvas = canvasRef.current;
       const context = canvas.getContext("2d");
 
-      // Set kích thước canvas bằng kích thước video thực tế
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
 
-      // Áp dụng filter lên context trước khi vẽ (để ảnh lưu cũng có filter)
       if (context.filter !== undefined) {
         context.filter = selectedFilter.value;
       }
 
-      // Lật ảnh nếu là camera trước
       if (isFrontCamera) {
         context.translate(canvas.width, 0);
         context.scale(-1, 1);
@@ -95,12 +89,10 @@ const CameraModal = ({ isOpen, onClose, onSendImage }) => {
       const imageUrl = canvas.toDataURL("image/png");
       setCapturedImage(imageUrl);
 
-      // Tắt stream camera tạm thời để tiết kiệm pin
       if (stream) stream.getTracks().forEach((t) => t.stop());
     }
   };
 
-  // 3. Hàm gửi ảnh
   const handleSend = () => {
     if (capturedImage) {
       onSendImage(capturedImage);
@@ -108,9 +100,8 @@ const CameraModal = ({ isOpen, onClose, onSendImage }) => {
     }
   };
 
-  // 4. Reset/Đóng
   const handleRetake = () => {
-    setCapturedImage(null); // Sẽ trigger useEffect startCamera lại
+    setCapturedImage(null);
   };
 
   const handleClose = () => {
@@ -141,7 +132,6 @@ const CameraModal = ({ isOpen, onClose, onSendImage }) => {
           )}
         </div>
 
-        {/* VIEWPORT: Video hoặc Ảnh đã chụp */}
         <div className="relative flex-1 bg-gray-900 overflow-hidden">
           {capturedImage ? (
             <img
@@ -161,13 +151,10 @@ const CameraModal = ({ isOpen, onClose, onSendImage }) => {
               }`}
             />
           )}
-          {/* Canvas ẩn để xử lý ảnh */}
           <canvas ref={canvasRef} className="hidden" />
         </div>
 
-        {/* FOOTER: Controls & Filters */}
         <div className="bg-black/90 backdrop-blur-lg pb-8 pt-4 px-4">
-          {/* Khu vực chọn Filter (Chỉ hiện khi chưa chụp) */}
           {!capturedImage && (
             <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide snap-x">
               {FILTERS.map((f) => (
@@ -191,16 +178,13 @@ const CameraModal = ({ isOpen, onClose, onSendImage }) => {
                       background:
                         "linear-gradient(45deg, #ff9a9e 0%, #fad0c4 99%, #fad0c4 100%)",
                     }}
-                  >
-                    {/* Giả lập thumbnail filter bằng background gradient */}
-                  </div>
+                  ></div>
                   <span className="text-xs font-medium">{f.name}</span>
                 </button>
               ))}
             </div>
           )}
 
-          {/* Action Buttons */}
           <div className="flex items-center justify-center gap-8 mt-2">
             {capturedImage ? (
               <>

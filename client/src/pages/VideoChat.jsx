@@ -13,17 +13,7 @@ import {
   addParticipant,
   removeParticipant,
 } from "@/store/actioncreator";
-import { rtdb } from "@/lib/firebase";
-import {
-  ref,
-  onValue,
-  set,
-  update,
-  onDisconnect,
-  onChildAdded,
-  onChildRemoved,
-  remove,
-} from "firebase/database";
+import { websocketService } from "@/lib/websocket";
 import { useAuth } from "@/context/AuthContext";
 
 export default function VideoChat() {
@@ -47,7 +37,13 @@ export default function VideoChat() {
       const audioTrack = mainStream.getAudioTracks()[0];
       if (audioTrack) {
         audioTrack.enabled = !audioTrack.enabled;
-        setIsMuted(!audioTrack.enabled); // Cập nhật UI
+        setIsMuted(!audioTrack.enabled);
+        // Notify other participants via WebSocket
+        if (roomId && user?.uid) {
+          websocketService.updateMediaPreference(roomId, {
+            audio: audioTrack.enabled,
+          });
+        }
       }
     }
   };
@@ -55,10 +51,15 @@ export default function VideoChat() {
   const toggleCamera = () => {
     if (mainStream) {
       const videoTrack = mainStream.getVideoTracks()[0];
-      console.log(videoTrack);
       if (videoTrack) {
         videoTrack.enabled = !videoTrack.enabled;
-        setIsCameraOff(!videoTrack.enabled); // Cập nhật UI
+        setIsCameraOff(!videoTrack.enabled);
+        // Notify other participants via WebSocket
+        if (roomId && user?.uid) {
+          websocketService.updateMediaPreference(roomId, {
+            video: videoTrack.enabled,
+          });
+        }
       }
     }
   };
@@ -68,12 +69,8 @@ export default function VideoChat() {
       streamRef.current.getTracks().forEach((track) => track.stop());
     }
 
-    if (roomId && user?.uid) {
-      const participantRef = ref(
-        rtdb,
-        `rooms/${roomId}/participants/${user.uid}`
-      );
-      await remove(participantRef);
+    if (roomId) {
+      websocketService.leaveVideoRoom(roomId);
     }
   };
 
@@ -115,57 +112,58 @@ export default function VideoChat() {
           },
         };
 
+        // Connect WebSocket and join video room
+        await websocketService.connect();
+        websocketService.joinVideoRoom(roomId);
+
         // Dispatch SetUser kèm RoomID để khởi tạo listener offer/answer
         dispatch(setUser(userPayload, roomId));
 
-        // Lưu user vào Firebase Room
-        const participantRef = ref(
-          rtdb,
-          `rooms/${roomId}/participants/${userId}`
-        );
-        await set(participantRef, {
-          displayName,
-          photoURL: user.photoURL || "/default-avatar.png",
-          preferences: { video: true, audio: true },
+        // Set up WebSocket listeners for participants
+        const unsubscribeUserJoined = websocketService.onUserJoined((data) => {
+          if (data.userId !== userId) {
+            dispatch(
+              addParticipant(
+                {
+                  [data.userId]: {
+                    displayName: data.displayName || "Anonymous",
+                    photoURL: data.photoURL || "/default-avatar.png",
+                    video: true,
+                    audio: true,
+                  },
+                },
+                roomId
+              )
+            );
+          }
         });
 
-        // Xử lý khi disconnect (tắt tab)
-        onDisconnect(participantRef).remove();
-
-        // Lắng nghe người khác tham gia vào PHÒNG NÀY
-        const roomParticipantsRef = ref(rtdb, `rooms/${roomId}/participants`);
-
-        // Handle User Added
-        const unsubscribeAdded = onChildAdded(
-          roomParticipantsRef,
-          (snapshot) => {
-            const newUserId = snapshot.key;
-            const data = snapshot.val();
-
-            // Chỉ add participant khác mình
-            if (newUserId !== userId) {
-              dispatch(
-                addParticipant(
-                  {
-                    [newUserId]: {
-                      displayName: data.displayName || "Anonymous",
-                      photoURL: data.photoURL || "/default-avatar.png",
-                      video: data.preferences?.video ?? true,
-                      audio: data.preferences?.audio ?? true,
-                    },
-                  },
-                  roomId
-                )
-              ); // Pass roomId
-            }
+        const unsubscribeUserLeft = websocketService.onUserLeft((data) => {
+          if (data.userId !== userId) {
+            dispatch(removeParticipant(data.userId));
           }
-        );
+        });
 
-        // Handle User Removed
-        const unsubscribeRemoved = onChildRemoved(
-          roomParticipantsRef,
-          (snapshot) => {
-            dispatch(removeParticipant(snapshot.key));
+        const unsubscribeRoomParticipants = websocketService.onRoomParticipants(
+          (data) => {
+            // Handle initial participants list
+            data.participants.forEach((participant) => {
+              if (participant.userId !== userId) {
+                dispatch(
+                  addParticipant(
+                    {
+                      [participant.userId]: {
+                        displayName: participant.displayName || "Anonymous",
+                        photoURL: participant.photoURL || "/default-avatar.png",
+                        video: true,
+                        audio: true,
+                      },
+                    },
+                    roomId
+                  )
+                );
+              }
+            });
           }
         );
 
@@ -178,15 +176,13 @@ export default function VideoChat() {
 
         return () => {
           window.removeEventListener("beforeunload", handleBeforeUnload);
-
-          unsubscribeAdded();
-          unsubscribeRemoved();
+          unsubscribeUserJoined();
+          unsubscribeUserLeft();
+          unsubscribeRoomParticipants();
           if (streamRef.current) {
             streamRef.current.getTracks().forEach((track) => track.stop());
           }
-          // stream.getTracks().forEach((track) => track.stop());
-          // Remove self from room explicitly on component unmount
-          set(participantRef, null);
+          websocketService.leaveVideoRoom(roomId);
         };
       } catch (error) {
         console.error("Error initializing video call:", error);

@@ -1,5 +1,4 @@
-import { rtdb } from "./firebase";
-import { ref, onValue, push, update, onChildAdded } from "firebase/database";
+import { websocketService } from "./websocket";
 import { store } from "../main";
 import { updateParticipant } from "../store/actioncreator";
 
@@ -25,9 +24,6 @@ const servers = {
 // Hàm hỗ trợ: Xử lý hàng đợi Candidate
 const processCandidateQueue = async (userId, pc) => {
   if (candidateQueue[userId] && candidateQueue[userId].length > 0) {
-    console.log(
-      `🔄 Đang xử lý ${candidateQueue[userId].length} candidates hàng đợi cho ${userId}`
-    );
     for (const candidate of candidateQueue[userId]) {
       try {
         await pc.addIceCandidate(new RTCIceCandidate(candidate));
@@ -42,13 +38,7 @@ const processCandidateQueue = async (userId, pc) => {
 
 // Update preferences (audio/video) theo Room
 export const updatePreference = (userId, preference, roomId) => {
-  const preferenceRef = ref(
-    rtdb,
-    `rooms/${roomId}/participants/${userId}/preferences`
-  );
-  setTimeout(() => {
-    update(preferenceRef, preference);
-  });
+  websocketService.updateMediaPreference(roomId, preference);
 };
 
 export const createOffer = async (
@@ -57,22 +47,13 @@ export const createOffer = async (
   createdID,
   roomId
 ) => {
-  console.log("da chay vao day");
-  const offerCandidatesRef = ref(
-    rtdb,
-    `rooms/${roomId}/participants/${receiverId}/offerCandidates`
-  );
-  const offersRef = ref(
-    rtdb,
-    `rooms/${roomId}/participants/${receiverId}/offers`
-  );
-
   peerConnection.onicecandidate = (event) => {
     if (event.candidate) {
-      push(offerCandidatesRef, {
-        ...event.candidate.toJSON(),
-        userId: createdID,
-      });
+      websocketService.sendICECandidate(
+        event.candidate.toJSON(),
+        receiverId,
+        roomId
+      );
     }
   };
 
@@ -85,147 +66,102 @@ export const createOffer = async (
     userId: createdID,
   };
 
-  console.log("offer = ", offer);
-
-  push(offersRef, { offer });
+  websocketService.sendWebRTCOffer(offer, receiverId, roomId);
 };
 
 export const initializeListeners = async (userId, roomId) => {
-  const roomPath = `rooms/${roomId}/participants/${userId}`;
-  const offersRef = ref(rtdb, `${roomPath}/offers`);
-  const offerCandidatesRef = ref(rtdb, `${roomPath}/offerCandidates`);
-  const answersRef = ref(rtdb, `${roomPath}/answers`);
-  const answerCandidatesRef = ref(rtdb, `${roomPath}/answerCandidates`);
+  // Set up WebSocket listeners for WebRTC signaling
 
-  onChildAdded(offersRef, async (snapshot) => {
-    const data = snapshot.val();
+  // Listen for WebRTC offers
+  const unsubscribeOffer = websocketService.onWebRTCOffer(async (data) => {
+    const { offer, fromUserId, roomId: receivedRoomId } = data;
 
-    // Kiểm tra xem có offer và người gửi không phải là chính mình
-    if (data?.offer && data.offer.userId !== userId) {
-      console.log("📩 Đã nhận được Offer từ:", data.offer.userId);
+    if (receivedRoomId !== roomId || offer.userId === userId) return;
 
-      const senderId = data.offer.userId;
+    const pc = participantConnections[fromUserId];
 
-      const pc = participantConnections[senderId];
+    if (pc) {
+      try {
+        const isReadyToReceive =
+          pc.signalingState === "stable" ||
+          pc.signalingState === "have-remote-offer";
 
-      // Bên trong listener nhận Offer
-      if (pc) {
-        try {
-          console.log("Trạng thái hiện tại:", pc.signalingState);
-
-          const isReadyToReceive =
-            pc.signalingState === "stable" ||
-            pc.signalingState === "have-remote-offer";
-
-          if (isReadyToReceive) {
-            console.log("⚙️ Đang set Remote Description...");
-
-            await pc.setRemoteDescription(
-              new RTCSessionDescription(data.offer)
-            );
-
-            console.log("Trạng thái sau khi set Remote:", pc.signalingState);
-
-            await processCandidateQueue(senderId, pc);
-
-            console.log("✍️ Đang tạo Answer...");
-            await createAnswer(senderId, userId, roomId);
-          } else {
-            console.warn(
-              "⚠️ Bỏ qua Offer vì đang bận xử lý tiến trình khác (Glare):",
-              pc.signalingState
-            );
-          }
-        } catch (error) {
-          console.error("❌ Lỗi khi xử lý Offer:", error);
-        }
-      }
-    }
-  });
-
-  // 2. Lắng nghe ICE Candidates cho Offer (Sửa onValue -> onChildAdded)
-  onChildAdded(offerCandidatesRef, (snapshot) => {
-    const data = snapshot.val();
-    if (data?.userId && data?.candidate) {
-      const pc = participantConnections[data.userId];
-      if (pc) {
-        if (pc.remoteDescription) {
-          pc.addIceCandidate(new RTCIceCandidate(data)).catch(console.error);
+        if (isReadyToReceive) {
+          await pc.setRemoteDescription(new RTCSessionDescription(offer));
+          await processCandidateQueue(fromUserId, pc);
+          await createAnswer(fromUserId, userId, roomId);
         } else {
-          console.warn("⏳ Candidate đến sớm, đang đưa vào hàng đợi...");
-          if (!candidateQueue[data.userId]) candidateQueue[data.userId] = [];
-          candidateQueue[data.userId].push(data);
+          console.warn(
+            "⚠️ Bỏ qua Offer vì đang bận xử lý tiến trình khác (Glare):",
+            pc.signalingState
+          );
         }
+      } catch (error) {
+        console.error("❌ Lỗi khi xử lý Offer:", error);
       }
     }
   });
 
-  // 3. Lắng nghe Answer
-  onChildAdded(answersRef, async (snapshot) => {
-    const data = snapshot.val();
-    if (data?.answer && data.answer.userId !== userId) {
-      console.log("📩 Đã nhận Answer từ:", data.answer.userId);
-      const pc = participantConnections[data.answer.userId];
+  // Listen for WebRTC answers
+  const unsubscribeAnswer = websocketService.onWebRTCAnswer(async (data) => {
+    const { answer, fromUserId, roomId: receivedRoomId } = data;
 
-      if (pc) {
-        try {
-          if (!pc.currentRemoteDescription) {
-            await pc.setRemoteDescription(
-              new RTCSessionDescription(data.answer)
-            );
-            console.log("✅ Đã set Remote Description (Answer)");
-            await processCandidateQueue(data.answer.userId, pc);
-          }
-        } catch (e) {
-          console.error(e);
+    if (receivedRoomId !== roomId || answer.userId === userId) return;
+
+    const pc = participantConnections[fromUserId];
+
+    if (pc) {
+      try {
+        if (!pc.currentRemoteDescription) {
+          await pc.setRemoteDescription(new RTCSessionDescription(answer));
+          await processCandidateQueue(fromUserId, pc);
         }
+      } catch (e) {
+        console.error(e);
       }
     }
   });
 
-  // 4. Lắng nghe ICE Candidates cho Answer
-  onChildAdded(answerCandidatesRef, (snapshot) => {
-    const data = snapshot.val();
-    if (data?.userId && data?.candidate) {
-      const pc = participantConnections[data.userId];
+  // Listen for ICE candidates
+  const unsubscribeICE = websocketService.onICECandidate((data) => {
+    const { candidate, fromUserId, roomId: receivedRoomId } = data;
 
-      if (pc) {
-        if (pc.remoteDescription) {
-          pc.addIceCandidate(new RTCIceCandidate(data)).catch(console.error);
-        } else {
-          console.warn("⏳ Answer Candidate đến sớm, đưa vào hàng đợi...");
-          if (!candidateQueue[data.userId]) candidateQueue[data.userId] = [];
-          candidateQueue[data.userId].push(data);
-        }
+    if (receivedRoomId !== roomId) return;
+
+    const pc = participantConnections[fromUserId];
+    if (pc) {
+      if (pc.remoteDescription) {
+        pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(console.error);
+      } else {
+        console.warn("⏳ Candidate đến sớm, đang đưa vào hàng đợi...");
+        if (!candidateQueue[fromUserId]) candidateQueue[fromUserId] = [];
+        candidateQueue[fromUserId].push(candidate);
       }
     }
   });
+
+  // Return cleanup function
+  return () => {
+    unsubscribeOffer();
+    unsubscribeAnswer();
+    unsubscribeICE();
+  };
 };
 
 const createAnswer = async (otherUserId, userId, roomId) => {
-  // const state = store.getState();
-  // const pc = state.userState.participants[otherUserId]?.peerConnection;
   const pc = participantConnections[otherUserId];
   if (!pc) {
     console.error("Không tìm thấy PC để tạo answer");
     return;
   }
 
-  const answerCandidatesRef = ref(
-    rtdb,
-    `rooms/${roomId}/participants/${otherUserId}/answerCandidates`
-  );
-  const answersRef = ref(
-    rtdb,
-    `rooms/${roomId}/participants/${otherUserId}/answers`
-  );
-
   pc.onicecandidate = (event) => {
     if (event.candidate) {
-      push(answerCandidatesRef, {
-        ...event.candidate.toJSON(),
-        userId: userId,
-      });
+      websocketService.sendICECandidate(
+        event.candidate.toJSON(),
+        otherUserId,
+        roomId
+      );
     }
   };
 
@@ -243,17 +179,13 @@ const createAnswer = async (otherUserId, userId, roomId) => {
     sdp: answerDescription.sdp,
     userId: userId,
   };
-  console.log("✅ Đã tạo và gửi Answer:", answer);
-  push(answersRef, { answer });
+  websocketService.sendWebRTCAnswer(answer, otherUserId, roomId);
 };
 
 // Tạo kết nối và xử lý stream
 export const addConnection = (newUser, currentUser, stream, roomId) => {
   const newUserId = Object.keys(newUser)[0];
-  console.log("newUserId = ", newUserId);
-  console.log("state.mainstream = ", stream);
   if (participantConnections[newUserId]) {
-    console.log("Connection already exists for", newUserId);
     return newUser;
   }
   const peerConnection = new RTCPeerConnection(servers);
@@ -264,10 +196,7 @@ export const addConnection = (newUser, currentUser, stream, roomId) => {
     });
   }
 
-  console.log("peerConnection = ", peerConnection);
-
   peerConnection.ontrack = (event) => {
-    console.log("📡 Received Remote Stream from:", Object.keys(newUser)[0]);
     if (event.streams && event.streams[0]) {
       store.dispatch(
         updateParticipant({
@@ -283,13 +212,10 @@ export const addConnection = (newUser, currentUser, stream, roomId) => {
   const offerIds = [newUserId, currentUserId].sort((a, b) =>
     a.localeCompare(b)
   );
-  console.log(offerIds);
 
   if (offerIds[0] === currentUserId) {
-    console.log("🚀 Tôi là người tạo Offer (Initiator)");
     createOffer(peerConnection, newUserId, currentUserId, roomId);
   } else {
-    console.log("⏳ Tôi sẽ đợi Offer từ phía bên kia (Receiver)");
   }
 
   return newUser;

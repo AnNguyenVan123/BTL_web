@@ -1,115 +1,94 @@
-const functions = require("firebase-functions");
 const { db, FieldValue } = require("../config/firebase");
+
 // API 1: Gửi lời mời kết bạn
-exports.sendFriendRequest = async (request) => {
-  // 1. Kiểm tra Auth
-  const data = request.data;
-  const auth = request.auth;
+exports.sendFriendRequest = async (req, res) => {
+  try {
+    const senderUid = req.user.uid;
+    const receiverUid = req.body.targetUid;
 
-  if (!auth) {
-    throw new functions.https.HttpsError(
-      "unauthenticated",
-      "Bạn phải đăng nhập."
-    );
-  }
+    if (!receiverUid) {
+      return res.status(400).json({ error: "targetUid is required" });
+    }
 
-  const senderUid = auth.uid;
-  const receiverUid = data.targetUid;
+    const senderRef = db.collection("users").doc(senderUid);
+    const receiverRef = db.collection("users").doc(receiverUid);
 
-  const senderRef = db.collection("users").doc(senderUid);
-  const receiverRef = db.collection("users").doc(receiverUid);
-
-  await db.runTransaction(async (transaction) => {
-    const senderDoc = await transaction.get(senderRef);
-    const receiverDoc = await transaction.get(receiverRef);
+    const senderDoc = await db.collection("users").doc(senderUid).get();
+    const receiverDoc = await db.collection("users").doc(receiverUid).get();
 
     if (!receiverDoc.exists) {
-      throw new functions.https.HttpsError(
-        "not-found",
-        "Người dùng không tồn tại."
-      );
+      return res.status(404).json({ error: "Người dùng không tồn tại." });
     }
 
     const senderData = senderDoc.data();
     const receiverData = receiverDoc.data();
 
     if (senderData.friends && senderData.friends.includes(receiverUid)) {
-      throw new functions.https.HttpsError(
-        "already-exists",
-        "Đã là bạn bè rồi."
-      );
+      return res.status(400).json({ error: "Đã là bạn bè rồi." });
     }
 
     if (
       senderData.sentRequests &&
       senderData.sentRequests.includes(receiverUid)
     ) {
-      throw new functions.https.HttpsError(
-        "already-exists",
-        "Đã gửi lời mời rồi."
-      );
+      return res.status(400).json({ error: "Đã gửi lời mời rồi." });
     }
 
     const hasIncomingRequest = (senderData.friendRequests || []).some(
       (req) => req.uid === receiverUid
     );
     if (hasIncomingRequest) {
-      throw new functions.https.HttpsError(
-        "failed-precondition",
-        "Người này đã gửi lời mời cho bạn. Hãy kiểm tra tab Requests."
-      );
+      return res.status(400).json({
+        error: "Người này đã gửi lời mời cho bạn. Hãy kiểm tra tab Requests.",
+      });
     }
 
     if (receiverData.blocked && receiverData.blocked.includes(senderUid)) {
-      throw new functions.https.HttpsError(
-        "permission-denied",
-        "Bạn không thể gửi lời mời."
-      );
+      return res.status(403).json({ error: "Bạn không thể gửi lời mời." });
     }
 
-    transaction.update(receiverRef, {
-      friendRequests: FieldValue.arrayUnion({
-        uid: senderUid,
-        displayName: senderData.displayName || "Unknown",
-        email: senderData.email || "",
-        photoURL: senderData.photoURL || "",
-      }),
+    await db.runTransaction(async (transaction) => {
+      transaction.update(receiverRef, {
+        friendRequests: FieldValue.arrayUnion({
+          uid: senderUid,
+          displayName: senderData.displayName || "Unknown",
+          email: senderData.email || "",
+          photoURL: senderData.photoURL || "",
+        }),
+      });
+
+      transaction.update(senderRef, {
+        sentRequests: FieldValue.arrayUnion(receiverUid),
+      });
     });
 
-    transaction.update(senderRef, {
-      sentRequests: FieldValue.arrayUnion(receiverUid),
-    });
-  });
-
-  return { message: "Success" };
+    return res.status(200).json({ message: "Success" });
+  } catch (error) {
+    console.error("Error sending friend request:", error);
+    return res.status(500).json({ error: error.message });
+  }
 };
 
 // API 2: Chấp nhận kết bạn
-exports.acceptFriendRequest = async (request) => {
-  if (!request.auth) {
-    throw new functions.https.HttpsError(
-      "unauthenticated",
-      "Bạn phải đăng nhập."
-    );
-  }
+exports.acceptFriendRequest = async (req, res) => {
+  try {
+    const myUid = req.user.uid;
+    const partnerUid = req.body.targetUid; // ID người gửi lời mời (người mình sắp accept)
 
-  const myUid = request.auth.uid;
-  const partnerUid = request.data.targetUid; // ID người gửi lời mời (người mình sắp accept)
+    if (!partnerUid) {
+      return res.status(400).json({ error: "targetUid is required" });
+    }
 
-  const myRef = db.collection("users").doc(myUid);
-  const partnerRef = db.collection("users").doc(partnerUid);
+    const myRef = db.collection("users").doc(myUid);
+    const partnerRef = db.collection("users").doc(partnerUid);
+    const myUserChatRef = db.collection("userchats").doc(myUid);
+    const partnerUserChatRef = db.collection("userchats").doc(partnerUid);
 
-  const myUserChatRef = db.collection("userchats").doc(myUid);
-  const partnerUserChatRef = db.collection("userchats").doc(partnerUid);
-
-  const chatRef = db.collection("chats").doc(); // Tạo ID mới cho đoạn chat
-
-  await db.runTransaction(async (t) => {
-    const myDoc = await t.get(myRef);
-    const partnerDoc = await t.get(partnerRef);
+    const myDoc = await db.collection("users").doc(myUid).get();
+    const partnerDoc = await db.collection("users").doc(partnerUid).get();
 
     if (!myDoc.exists || !partnerDoc.exists) {
-      throw new functions.https.HttpsError("not-found", "User không tồn tại");
+      return res.status(404).json({ error: "User không tồn tại" });
     }
 
     const myData = myDoc.data();
@@ -120,156 +99,164 @@ exports.acceptFriendRequest = async (request) => {
     );
 
     if (!requestObject) {
-      throw new functions.https.HttpsError(
-        "not-found",
-        "Lời mời kết bạn không tồn tại hoặc đã bị hủy."
-      );
+      return res.status(404).json({
+        error: "Lời mời kết bạn không tồn tại hoặc đã bị hủy.",
+      });
     }
 
-    // 2. Tạo Chat Room mới
-    t.set(chatRef, {
-      createdAt: FieldValue.serverTimestamp(),
-      messages: [],
+    const chatRef = db.collection("chats").doc();
+
+    await db.runTransaction(async (t) => {
+      // 2. Tạo Chat Room mới
+      t.set(chatRef, {
+        createdAt: FieldValue.serverTimestamp(),
+        messages: [],
+      });
+
+      // 3. Update UserChats cho MÌNH
+      t.set(
+        myUserChatRef,
+        {
+          chats: FieldValue.arrayUnion({
+            chatId: chatRef.id,
+            receiverId: partnerUid,
+            updatedAt: Date.now(),
+            lastMessage: "",
+          }),
+        },
+        { merge: true }
+      );
+
+      // 4. Update UserChats cho ĐỐI PHƯƠNG
+      t.set(
+        partnerUserChatRef,
+        {
+          chats: FieldValue.arrayUnion({
+            chatId: chatRef.id,
+            receiverId: myUid,
+            updatedAt: Date.now(),
+            lastMessage: "",
+          }),
+        },
+        { merge: true }
+      );
+
+      // 5. DỌN DẸP REQUEST
+      t.update(myRef, {
+        friendRequests: FieldValue.arrayRemove(requestObject),
+      });
+
+      t.update(partnerRef, {
+        sentRequests: FieldValue.arrayRemove(myUid),
+      });
+
+      t.update(myRef, {
+        friends: FieldValue.arrayUnion(partnerUid),
+      });
+
+      t.update(partnerRef, {
+        friends: FieldValue.arrayUnion(myUid),
+      });
     });
 
-    // 3. Update UserChats cho MÌNH
-    t.set(
-      myUserChatRef,
-      {
-        chats: FieldValue.arrayUnion({
-          chatId: chatRef.id,
-          receiverId: partnerUid,
-          updatedAt: Date.now(),
-          lastMessage: "",
-        }),
-      },
-      { merge: true }
-    );
-
-    // 4. Update UserChats cho ĐỐI PHƯƠNG
-    t.set(
-      partnerUserChatRef,
-      {
-        chats: FieldValue.arrayUnion({
-          chatId: chatRef.id,
-          receiverId: myUid,
-          updatedAt: Date.now(),
-          lastMessage: "",
-        }),
-      },
-      { merge: true }
-    );
-
-    // 5. DỌN DẸP REQUEST
-    t.update(myRef, {
-      friendRequests: FieldValue.arrayRemove(requestObject),
-    });
-
-    t.update(partnerRef, {
-      sentRequests: FieldValue.arrayRemove(myUid),
-    });
-
-    t.update(myRef, {
-      friends: FieldValue.arrayUnion(partnerUid),
-    });
-
-    t.update(partnerRef, {
-      friends: FieldValue.arrayUnion(myUid),
-    });
-  });
-
-  return { success: true };
+    return res.status(200).json({ success: true, chatId: chatRef.id });
+  } catch (error) {
+    console.error("Error accepting friend request:", error);
+    return res.status(500).json({ error: error.message });
+  }
 };
 
 // API 3: Từ chối lời mời kết bạn
-exports.rejectFriendRequest = async (request) => {
-  const auth = request.auth;
-  const data = request.data;
+exports.rejectFriendRequest = async (req, res) => {
+  try {
+    const myUid = req.user.uid;
+    const partnerUid = req.body.targetUid;
 
-  if (!auth) {
-    throw new functions.https.HttpsError(
-      "unauthenticated",
-      "Bạn phải đăng nhập."
-    );
-  }
+    if (!partnerUid) {
+      return res.status(400).json({ error: "targetUid is required" });
+    }
 
-  const myUid = auth.uid;
-  const partnerUid = data.targetUid;
+    const myRef = db.collection("users").doc(myUid);
+    const partnerRef = db.collection("users").doc(partnerUid);
 
-  const myRef = db.collection("users").doc(myUid);
-  const partnerRef = db.collection("users").doc(partnerUid);
-
-  await db.runTransaction(async (t) => {
-    const myDoc = await t.get(myRef);
+    const myDoc = await db.collection("users").doc(myUid).get();
     if (!myDoc.exists) {
-      throw new functions.https.HttpsError("not-found", "User không tồn tại");
+      return res.status(404).json({ error: "User không tồn tại" });
     }
 
     const myData = myDoc.data();
-
     const requestObject = (myData.friendRequests || []).find(
       (req) => req.uid === partnerUid
     );
 
     if (!requestObject) {
-      return;
+      return res.status(200).json({ success: true });
     }
 
-    t.update(myRef, {
-      friendRequests: FieldValue.arrayRemove(requestObject),
-    });
-
-    t.update(partnerRef, {
-      sentRequests: FieldValue.arrayRemove(myUid),
-    });
-  });
-
-  return { success: true };
-};
-
-// --- API 4: Block User ---
-exports.blockUser = async (request) => {
-  const auth = request.auth;
-  const data = request.data;
-
-  if (!auth) throw new HttpsError("unauthenticated", "Login required.");
-
-  const myUid = auth.uid;
-  const targetUid = data.targetUid;
-
-  const myRef = db.collection("users").doc(myUid);
-  const targetRef = db.collection("users").doc(targetUid);
-
-  await db.runTransaction(async (t) => {
-    const myDoc = await t.get(myRef);
-    const targetDoc = await t.get(targetRef);
-
-    if (!myDoc.exists || !targetDoc.exists) {
-      throw new HttpsError("not-found", "User not found");
-    }
-
-    const myData = myDoc.data();
-
-    t.update(myRef, {
-      blocked: FieldValue.arrayUnion(targetUid),
-      friends: FieldValue.arrayRemove(targetUid),
-      sentRequests: FieldValue.arrayRemove(targetUid),
-    });
-
-    const requestObject = (myData.friendRequests || []).find(
-      (req) => req.uid === targetUid
-    );
-    if (requestObject) {
+    await db.runTransaction(async (t) => {
       t.update(myRef, {
         friendRequests: FieldValue.arrayRemove(requestObject),
       });
+
+      t.update(partnerRef, {
+        sentRequests: FieldValue.arrayRemove(myUid),
+      });
+    });
+
+    return res.status(200).json({ success: true });
+  } catch (error) {
+    console.error("Error rejecting friend request:", error);
+    return res.status(500).json({ error: error.message });
+  }
+};
+
+// --- API 4: Block User ---
+exports.blockUser = async (req, res) => {
+  try {
+    const myUid = req.user.uid;
+    const targetUid = req.body.targetUid;
+
+    if (!targetUid) {
+      return res.status(400).json({ error: "targetUid is required" });
     }
 
-    t.update(targetRef, {
-      friends: FieldValue.arrayRemove(myUid),
-      sentRequests: FieldValue.arrayRemove(myUid),
-    });
-  });
+    const myRef = db.collection("users").doc(myUid);
+    const targetRef = db.collection("users").doc(targetUid);
 
-  return { success: true };
+    const myDoc = await myRef.get();
+    const targetDoc = await targetRef.get();
+
+    if (!myDoc.exists || !targetDoc.exists) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    const myData = myDoc.data();
+    const requestObject = (myData.friendRequests || []).find(
+      (req) => req.uid === targetUid
+    );
+
+    await db.runTransaction(async (t) => {
+      t.update(myRef, {
+        blocked: FieldValue.arrayUnion(targetUid),
+        friends: FieldValue.arrayRemove(targetUid),
+        sentRequests: FieldValue.arrayRemove(targetUid),
+      });
+
+      if (requestObject) {
+        t.update(myRef, {
+          friendRequests: FieldValue.arrayRemove(requestObject),
+        });
+      }
+
+      t.update(targetRef, {
+        friends: FieldValue.arrayRemove(myUid),
+        sentRequests: FieldValue.arrayRemove(myUid),
+      });
+    });
+
+    return res.status(200).json({ success: true });
+  } catch (error) {
+    console.error("Error blocking user:", error);
+    return res.status(500).json({ error: error.message });
+  }
 };

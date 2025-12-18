@@ -11,8 +11,8 @@ import {
   ExclamationCircleOutlined,
 } from "@ant-design/icons";
 
-import { db, functions } from "../../../../lib/firebase";
-import { httpsCallable } from "firebase/functions";
+import { db } from "../../../../lib/firebase";
+import { apiService } from "../../../../lib/api";
 
 import {
   collection,
@@ -36,17 +36,14 @@ export default function AddUser() {
   const [search, setSearch] = useState("");
   const [results, setResults] = useState([]);
 
-  // Quản lý trạng thái loading của các nút
   const [addingStatus, setAddingStatus] = useState({});
   const [processingId, setProcessingId] = useState(null);
 
-  // State dữ liệu User
   const [friendIds, setFriendIds] = useState(new Set());
   const [blockedIds, setBlockedIds] = useState(new Set());
   const [sentRequests, setSentRequests] = useState(new Set());
   const [friendRequests, setFriendRequests] = useState([]);
 
-  // --- 1. HANDLE SEARCH ---
   const handleSearch = async (value) => {
     setSearch(value);
     if (value.trim() === "") {
@@ -78,19 +75,14 @@ export default function AddUser() {
       ).filter((u) => u.uid !== user.uid);
 
       setResults(unique);
-    } catch (error) {
-      console.log("Search error:", error);
-    }
+    } catch (error) {}
   };
 
-  // --- 2. HANDLE SEND REQUEST ---
   const handleSendRequest = async (userTarget) => {
     setAddingStatus((prev) => ({ ...prev, [userTarget.uid]: "loading" }));
 
-    const sendRequestFn = httpsCallable(functions, "sendFriendRequest");
-
     try {
-      await sendRequestFn({ targetUid: userTarget.uid });
+      await apiService.sendFriendRequest(userTarget.uid);
       message.success("Friend request sent!");
     } catch (error) {
       console.error("Lỗi:", error.message);
@@ -100,7 +92,6 @@ export default function AddUser() {
     }
   };
 
-  // --- HANDLE CANCEL REQUEST (Hủy lời mời đã gửi) ---
   const handleCancelRequest = async (receiverUid) => {
     try {
       await updateDoc(doc(db, "users", user.uid), {
@@ -116,8 +107,7 @@ export default function AddUser() {
     if (processingId) return;
     setProcessingId(requestUser.uid);
     try {
-      const acceptFn = httpsCallable(functions, "acceptFriendRequest");
-      await acceptFn({ targetUid: requestUser.uid });
+      await apiService.acceptFriendRequest(requestUser.uid);
       message.success(`You and ${requestUser.displayName} are now friends!`);
     } catch (error) {
       message.error(error.message);
@@ -130,8 +120,7 @@ export default function AddUser() {
     if (processingId) return;
     setProcessingId(requestUser.uid);
     try {
-      const rejectFn = httpsCallable(functions, "rejectFriendRequest");
-      await rejectFn({ targetUid: requestUser.uid });
+      await apiService.rejectFriendRequest(requestUser.uid);
       message.info("Request removed.");
     } catch (error) {
       message.error(error.message);
@@ -142,9 +131,7 @@ export default function AddUser() {
 
   const handleBlock = async (targetUid) => {
     try {
-      const blockFn = httpsCallable(functions, "blockUser");
-      await blockFn({ targetUid });
-
+      await apiService.blockUser(targetUid);
       message.success("User blocked successfully");
     } catch (err) {
       console.error(err);
