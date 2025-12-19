@@ -11,15 +11,10 @@ import {
 import { Input, Image, Avatar } from "antd";
 
 import { storage, db } from "../lib/firebase";
-import {
-  onSnapshot,
-  doc,
-  updateDoc,
-  arrayUnion,
-  getDoc,
-} from "firebase/firestore";
+import { doc, getDoc } from "firebase/firestore";
 import { ref, uploadString, getDownloadURL } from "firebase/storage";
 import { v4 as uuidv4 } from "uuid";
+import { websocketService } from "../lib/websocket";
 
 import Header from "../components/pages/chat/main/Header";
 import AddUser from "../components/pages/chat/sidebar/AddUser";
@@ -29,7 +24,8 @@ import CameraUI from "../components/pages/chat/main/CameraUI";
 import { useAuth } from "../context/AuthContext";
 
 export default function Chat() {
-  const { close, setClose, selectedChatId, receiver } = useContext(ChatContext);
+  const { close, setClose, selectedChatId, receiver, setReceiver } =
+    useContext(ChatContext);
   const [messages, setMessages] = useState([]);
   const [text, setText] = useState("");
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -39,11 +35,11 @@ export default function Chat() {
   const [memberDetails, setMemberDetails] = useState({});
 
   const inputRef = useRef(null);
+  const messagesEndRef = useRef(null);
+  const messagesContainerRef = useRef(null);
 
   const { user } = useAuth();
 
-  // --- Helpers: Xác định thông tin hiển thị Header ---
-  // Nếu là Group: Lấy tên nhóm. Nếu là 1-1: Lấy từ receiver context
   const getChatInfo = () => {
     if (chatMetadata?.type === "group") {
       return {
@@ -53,23 +49,11 @@ export default function Chat() {
         isGroup: true,
       };
     }
-    // Fallback cho chat 1-1
     return receiver;
   };
 
   const currentChatInfo = getChatInfo();
 
-  // --- Helpers: Lấy danh sách ID cần update UserChats ---
-  const getRecipientsForUpdate = () => {
-    if (chatMetadata?.type === "group") {
-      // Nếu là group, update cho tất cả thành viên
-      return chatMetadata.members || [];
-    }
-    // Nếu là 1-1
-    return [user.uid, receiver?.uid].filter(Boolean);
-  };
-
-  // Hàm khi bấm vào nút "Tap to view"
   const handleOpenSnap = (message) => {
     const isViewedByMe =
       message.viewedBy && message.viewedBy.includes(user.uid);
@@ -78,48 +62,18 @@ export default function Chat() {
     setViewingSnap(message);
   };
 
-  // Hàm khi đóng Modal -> THỰC HIỆN XÓA ẢNH
   const handleCloseSnap = async () => {
     if (!viewingSnap) return;
 
     const messageToBurn = viewingSnap;
-
     setViewingSnap(null);
 
-    try {
-      const chatRef = doc(db, "chats", selectedChatId);
-      const chatSnap = await getDoc(chatRef);
-
-      if (chatSnap.exists()) {
-        const data = chatSnap.data();
-
-        const updatedMessages = data.messages.map((msg) => {
-          if (msg.id === messageToBurn.id) {
-            const currentViewedBy = msg.viewedBy || [];
-            const newViewedBy = currentViewedBy.includes(user.uid)
-              ? currentViewedBy
-              : [...currentViewedBy, user.uid];
-            return {
-              ...msg,
-              viewedBy: newViewedBy,
-            };
-          }
-          return msg;
-        });
-        await updateDoc(chatRef, {
-          messages: updatedMessages,
-        });
-        console.log("Đã đốt ảnh thành công!");
-      }
-    } catch (err) {
-      console.error("Lỗi khi đốt ảnh:", err);
-    }
+    websocketService.viewSnap(selectedChatId, messageToBurn.id);
   };
 
   const handleSendImage = async (imageBase64) => {
     try {
       console.log("Đang upload ảnh...");
-
       const imageId = uuidv4();
       const storageRef = ref(storage, `snaps/${imageId}.png`);
 
@@ -127,42 +81,12 @@ export default function Chat() {
 
       const downloadURL = await getDownloadURL(storageRef);
 
-      const messageId = uuidv4();
-      const newMessage = {
-        id: messageId,
-        senderId: user.uid,
-        text: "Sent a Snap",
-        img: downloadURL,
-        type: "snap",
-        viewedBy: [],
-        createdAt: new Date(),
-      };
-
-      await updateDoc(doc(db, "chats", selectedChatId), {
-        messages: arrayUnion(newMessage),
-      });
-
-      const userIds = getRecipientsForUpdate();
-      userIds.forEach(async (id) => {
-        const userChatsRef = doc(db, "userchats", id);
-        const userChatsSnapshot = await getDoc(userChatsRef);
-
-        if (userChatsSnapshot.exists()) {
-          const userChatsData = userChatsSnapshot.data();
-          const chatIndex = userChatsData.chats.findIndex(
-            (c) => c.chatId === selectedChatId
-          );
-
-          userChatsData.chats[chatIndex].lastMessage = "📷 Sent a photo";
-          userChatsData.chats[chatIndex].isSeen = id === user.uid;
-          userChatsData.chats[chatIndex].updatedAt = Date.now();
-
-          await updateDoc(userChatsRef, {
-            chats: userChatsData.chats,
-          });
-        }
-      });
-
+      websocketService.sendMessage(
+        selectedChatId,
+        "Sent a Snap",
+        "snap",
+        downloadURL
+      );
       console.log("Đã gửi Snap thành công!");
     } catch (error) {
       console.error("Lỗi gửi ảnh:", error);
@@ -175,93 +99,256 @@ export default function Chat() {
 
   const handleSend = async () => {
     if (!text || !text.trim()) return;
+    const messageText = text;
     inputRef.current.input.value = "";
     setText("");
     setShowEmojiPicker(false);
-    try {
-      await updateDoc(doc(db, "chats", selectedChatId), {
-        messages: arrayUnion({
-          senderId: user.uid,
-          text,
-          createdAt: new Date(),
-        }),
-      });
 
-      const userIds = getRecipientsForUpdate();
-      userIds.forEach(async (id) => {
-        const userChatsRef = doc(db, "userchats", id);
-        const userChatsSnapshot = await getDoc(userChatsRef);
-
-        if (userChatsSnapshot.exists()) {
-          const userChatsData = userChatsSnapshot.data();
-          const chatIndex = userChatsData.chats.findIndex(
-            (c) => c.chatId === selectedChatId
-          );
-
-          userChatsData.chats[chatIndex].lastMessage = text;
-          userChatsData.chats[chatIndex].isSeen =
-            id === user.uid ? true : false;
-          userChatsData.chats[chatIndex].updatedAt = Date.now();
-
-          await updateDoc(userChatsRef, {
-            chats: userChatsData.chats,
-          });
-        }
-      });
-    } catch (error) {
-      console.log(error);
-    }
+    websocketService.sendMessage(selectedChatId, messageText);
   };
 
   useEffect(() => {
     if (!selectedChatId) return;
 
-    const chatDocRef = doc(db, "chats", selectedChatId);
+    const loadChatData = async () => {
+      try {
+        const chatDocRef = doc(db, "chats", selectedChatId);
+        const chatSnap = await getDoc(chatDocRef);
 
-    const unSub = onSnapshot(
-      chatDocRef,
-      (docSnap) => {
-        if (docSnap.exists()) {
-          const data = docSnap.data();
+        if (chatSnap.exists()) {
+          const data = chatSnap.data();
           setMessages(data.messages || []);
           setChatMetadata(data);
         } else {
           setMessages([]);
           setChatMetadata(null);
         }
-      },
-      (error) => {
-        console.error("Firestore Error:", error);
+      } catch (error) {
+        console.error("Error loading chat data:", error);
       }
-    );
+    };
 
-    return () => unSub();
+    loadChatData();
+
+    const currentChatId = selectedChatId;
+
+    const unsubscribeNewMessage = websocketService.onNewMessage((data) => {
+      console.log("📩 New message received:", data);
+      if (data.chatId === currentChatId) {
+        console.log("✅ Adding message to state:", data.message);
+        setMessages((prev) => {
+          const exists = prev.some((msg) => msg.id === data.message.id);
+          if (exists) {
+            console.log("⚠️ Message already exists, skipping");
+            return prev;
+          }
+
+          return [...prev, data.message];
+        });
+
+        setTimeout(() => {
+          messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+        }, 100);
+      } else {
+        console.log(
+          `⚠️ Message for different chat (${data.chatId} vs ${currentChatId}), ignoring`
+        );
+      }
+    });
+
+    const unsubscribeSnapViewed = websocketService.onSnapViewed((data) => {
+      if (data.chatId === currentChatId) {
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === data.messageId
+              ? { ...msg, viewedBy: data.viewedBy }
+              : msg
+          )
+        );
+      }
+    });
+
+    const unsubscribeError = websocketService.onError((error) => {
+      console.error("WebSocket error:", error);
+      if (error.message === "Access denied" && currentChatId) {
+        console.warn(`⚠️ Access denied for chat ${currentChatId}, will retry`);
+      }
+    });
+
+    const unsubscribeJoinedChat = websocketService.onJoinedChat((data) => {
+      console.log("✅ Joined chat room:", data);
+      if (data.chatId === currentChatId) {
+        console.log(`✅ Successfully joined chat room: ${currentChatId}`);
+      }
+    });
+
+    const setupWebSocket = async () => {
+      try {
+        if (!websocketService.isConnected) {
+          console.log("🔄 Connecting WebSocket...");
+          await websocketService.connect();
+        }
+
+        if (!websocketService.isConnected) {
+          console.error("❌ WebSocket still not connected after connect()");
+          setTimeout(() => setupWebSocket(), 1000);
+          return;
+        }
+
+        console.log("✅ WebSocket ready, joining chat:", currentChatId);
+
+        await new Promise((resolve) => setTimeout(resolve, 300));
+
+        if (!websocketService.isConnected) {
+          console.error("❌ Socket disconnected before join, retrying...");
+          setTimeout(() => setupWebSocket(), 1000);
+          return;
+        }
+
+        console.log("📤 Calling joinChat for:", currentChatId);
+        websocketService.joinChat(currentChatId);
+
+        console.log("✅ joinChat called, waiting for server confirmation...");
+      } catch (error) {
+        console.error("❌ Failed to setup WebSocket:", error);
+        setTimeout(() => {
+          setupWebSocket();
+        }, 2000);
+      }
+    };
+
+    setupWebSocket();
+
+    return () => {
+      console.log(`🧹 Cleaning up chat ${currentChatId}`);
+      unsubscribeNewMessage();
+      unsubscribeSnapViewed();
+      unsubscribeError();
+      unsubscribeJoinedChat();
+      if (currentChatId) {
+        websocketService.leaveChat(currentChatId);
+      }
+    };
   }, [selectedChatId]);
 
   useEffect(() => {
-    if (!chatMetadata?.members) return;
+    if (selectedChatId) {
+      setTimeout(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: "auto" });
+      }, 300);
+    }
+  }, [selectedChatId]);
+
+  useEffect(() => {
+    if (messages.length > 0) {
+      setTimeout(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: "auto" });
+      }, 200);
+    }
+  }, [messages.length]);
+
+  useEffect(() => {
+    if (!chatMetadata || !selectedChatId) return;
 
     const fetchMembers = async () => {
       const details = {};
 
-      // Lấy thông tin cho tất cả thành viên trong mảng members
-      const promises = chatMetadata.members.map(async (uid) => {
+      if (chatMetadata.type === "group") {
+        if (!chatMetadata.members) return;
+
+        const promises = chatMetadata.members.map(async (uid) => {
+          try {
+            const userDoc = await getDoc(doc(db, "users", uid));
+            if (userDoc.exists()) {
+              details[uid] = userDoc.data();
+            }
+          } catch (error) {
+            console.error("Error fetching member:", uid);
+          }
+        });
+
+        await Promise.all(promises);
+      } else {
         try {
-          const userDoc = await getDoc(doc(db, "users", uid));
-          if (userDoc.exists()) {
-            details[uid] = userDoc.data();
+          const currentUserDoc = await getDoc(doc(db, "users", user.uid));
+          if (currentUserDoc.exists()) {
+            details[user.uid] = currentUserDoc.data();
+          }
+
+          const userChatsRef = doc(db, "userchats", user.uid);
+          const userChatsDoc = await getDoc(userChatsRef);
+
+          if (userChatsDoc.exists()) {
+            const userChats = userChatsDoc.data().chats || [];
+            const chatEntry = userChats.find(
+              (chat) => chat.chatId === selectedChatId
+            );
+
+            if (chatEntry?.receiverId) {
+              const receiverDoc = await getDoc(
+                doc(db, "users", chatEntry.receiverId)
+              );
+              if (receiverDoc.exists()) {
+                details[chatEntry.receiverId] = receiverDoc.data();
+              }
+            }
           }
         } catch (error) {
-          console.error("Error fetching member:", uid);
+          console.error("Error fetching 1-1 chat members:", error);
         }
-      });
+      }
 
-      await Promise.all(promises);
       setMemberDetails(details);
     };
 
     fetchMembers();
-  }, [chatMetadata]);
+  }, [chatMetadata, selectedChatId, user.uid]);
+
+  useEffect(() => {
+    if (!selectedChatId || !chatMetadata) return;
+
+    if (chatMetadata.type === "group") return;
+
+    if (!receiver?.uid || !receiver?.displayName || !receiver?.photoURL) {
+      const fetchReceiverInfo = async () => {
+        try {
+          const userChatsRef = doc(db, "userchats", user.uid);
+          const userChatsDoc = await getDoc(userChatsRef);
+
+          if (userChatsDoc.exists()) {
+            const userChats = userChatsDoc.data().chats || [];
+            const chatEntry = userChats.find(
+              (chat) => chat.chatId === selectedChatId
+            );
+
+            if (chatEntry?.receiverId) {
+              const receiverDoc = await getDoc(
+                doc(db, "users", chatEntry.receiverId)
+              );
+              if (receiverDoc.exists()) {
+                const receiverData = receiverDoc.data();
+                if (setReceiver) {
+                  setReceiver({
+                    uid: chatEntry.receiverId,
+                    displayName: receiverData.displayName || "Unknown",
+                    photoURL: receiverData.photoURL || "/default-avatar.png",
+                  });
+                }
+                setMemberDetails((prev) => ({
+                  ...prev,
+                  [chatEntry.receiverId]: receiverData,
+                }));
+              }
+            }
+          }
+        } catch (error) {
+          console.error("Error fetching receiver info:", error);
+        }
+      };
+
+      fetchReceiverInfo();
+    }
+  }, [selectedChatId, chatMetadata, receiver, user.uid]);
 
   return (
     <>
@@ -271,12 +358,15 @@ export default function Chat() {
           <AddUser />
         </div>
       ) : (
-        <div className="h-screen relative">
+        <div className="h-screen relative flex flex-col">
           <AddUser />
-          <div className="p-2 bg-[#121212] h-full flex flex-col">
+          <div className="p-2 bg-[#121212] flex-1 flex flex-col min-h-0">
             <Header setClose={setClose} receiver={currentChatInfo} />
-            <div className="p-3 border-gray-700 rounded-2xl bg-[#1E1E1E] h-full flex flex-col">
-              <div className="flex-1 overflow-y-auto">
+            <div className="p-3 border-gray-700 rounded-2xl bg-[#1E1E1E] flex-1 flex flex-col min-h-0">
+              <div
+                ref={messagesContainerRef}
+                className="flex-1 overflow-y-auto min-h-0"
+              >
                 {!selectedChatId ? (
                   <div className="text-center text-gray-400 mt-8">
                     Select a chat to start messaging
@@ -312,14 +402,12 @@ export default function Chat() {
                                 isOwner ? "items-end" : "items-start"
                               }`}
                             >
-                              {/* Display Name - Chỉ hiện nếu không phải là mình */}
                               {!isOwner && (
                                 <span className="text-gray-400 text-[10px] ml-1 mb-1 font-semibold">
                                   {senderInfo?.displayName || "Member"}
                                 </span>
                               )}
 
-                              {/* Message Bubble / Snap Bubble */}
                               <div
                                 className={`p-2 rounded-xl ${
                                   isOwner
@@ -329,7 +417,6 @@ export default function Chat() {
                               >
                                 {m.type === "snap" ? (
                                   <div className="flex flex-col gap-1">
-                                    {/* 2. LOGIC RENDER: Dùng biến isViewedByMe thay vì m.isViewed */}
                                     {isViewedByMe ? (
                                       <div
                                         className={`flex items-center gap-2 px-3 py-2 rounded border ${
@@ -340,13 +427,10 @@ export default function Chat() {
                                       >
                                         <span className="text-lg">🔥</span>
                                         <span className="text-gray-400 text-sm italic">
-                                          {/* Nếu là của mình gửi: Hiện "Opened"
-                                                Nếu của người khác gửi: Hiện "Expired" */}
                                           {isOwner ? "Opened" : "Expired"}
                                         </span>
                                       </div>
                                     ) : (
-                                      // TRƯỜNG HỢP CHƯA XEM (HOẶC MÌNH LÀ NGƯỜI GỬI)
                                       <>
                                         {isOwner ? (
                                           <div className="bg-blue-600/20 p-2 rounded-lg border border-blue-500/50">
@@ -385,11 +469,12 @@ export default function Chat() {
                         );
                       })
                     )}
+                    <div ref={messagesEndRef} />
                   </div>
                 )}
               </div>
 
-              <div className="grid grid-cols-[1fr_20fr_1fr_1fr] place-content-center gap-3 mt-4 relative">
+              <div className="grid grid-cols-[1fr_20fr_1fr_1fr] place-content-center gap-3 mt-4 relative shrink-0">
                 {showEmojiPicker && (
                   <div className="absolute bottom-12 right-0 z-50 shadow-lg">
                     <EmojiPicker
@@ -415,6 +500,18 @@ export default function Chat() {
                     value={text}
                     onChange={(e) => setText(e.target.value)}
                     onPressEnter={handleSend}
+                    onFocus={async () => {
+                      if (selectedChatId) {
+                        if (window.__markChatAsSeenOptimistic) {
+                          window.__markChatAsSeenOptimistic(selectedChatId);
+                        }
+
+                        if (!websocketService.isConnected) {
+                          await websocketService.connect();
+                        }
+                        websocketService.markChatAsSeen(selectedChatId);
+                      }
+                    }}
                   />
                 </div>
 
