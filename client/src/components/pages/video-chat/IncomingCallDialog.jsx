@@ -49,8 +49,26 @@ const IncomingCallDialog = () => {
           }
         );
 
+        const unsubscribeCallCancelled = websocketService.onCallCancelled(
+          (data) => {
+            setCallData((prev) => {
+              if (!prev) return prev;
+              const matchByRoom =
+                data?.roomId && prev.roomId && data.roomId === prev.roomId;
+              const matchByCaller =
+                data?.callerId &&
+                prev.callerId &&
+                data.callerId === prev.callerId;
+              return matchByRoom || matchByCaller ? null : prev;
+            });
+          }
+        );
+
         console.log(`✅ [IncomingCallDialog] Listener setup complete`);
-        return unsubscribeIncomingCall;
+        return () => {
+          if (unsubscribeIncomingCall) unsubscribeIncomingCall();
+          if (unsubscribeCallCancelled) unsubscribeCallCancelled();
+        };
       } catch (error) {
         return () => {};
       }

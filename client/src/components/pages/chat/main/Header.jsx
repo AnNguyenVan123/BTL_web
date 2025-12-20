@@ -37,7 +37,7 @@ export default function Header({ setClose, receiver }) {
 
       await new Promise((resolve) => setTimeout(resolve, 300));
 
-      navigate(`/video-chat?id=${newRoomId}`);
+      navigate(`/video-chat?id=${newRoomId}&target=${targetUserId}`);
     } catch (error) {
       alert("Không thể kết nối tới người dùng này.");
     }
