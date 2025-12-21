@@ -4,8 +4,8 @@ import { Mic, MicOff, VideoOff } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 const VideoTile = ({ participant, isMe, isCameraOff }) => {
-  console.log(participant);
   const videoRef = useRef(null);
+  const audioRef = useRef(null);
 
   const getInitials = (name) => {
     return (name || "Anonymous")
@@ -18,6 +18,9 @@ const VideoTile = ({ participant, isMe, isCameraOff }) => {
   useEffect(() => {
     if (videoRef.current && participant.stream) {
       videoRef.current.srcObject = participant.stream;
+    }
+    if (audioRef.current && participant.stream) {
+      audioRef.current.srcObject = participant.stream;
     }
   }, [participant.stream, isCameraOff]);
 
@@ -50,6 +53,14 @@ const VideoTile = ({ participant, isMe, isCameraOff }) => {
             }`}
           />
         )}
+        {/* Hidden audio element to ensure audio plays even when video is off */}
+        <audio
+          ref={audioRef}
+          autoPlay
+          playsInline
+          muted={isMe}
+          className="hidden"
+        />
       </div>
 
       <div className="absolute inset-0 bg-linear-to-t from-black/60 via-transparent to-transparent"></div>
