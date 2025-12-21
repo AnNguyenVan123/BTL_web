@@ -45,6 +45,8 @@ const IncomingCallDialog = () => {
               callerPhoto: data.callerPhoto,
               roomId: data.roomId,
               timestamp: data.timestamp,
+              callType: data.callType || "video",
+              chatId: data.chatId,
             });
           }
         );
@@ -88,14 +90,33 @@ const IncomingCallDialog = () => {
     if (!callData || !user?.uid) return;
 
     const roomId = callData.roomId;
+    const mode = callData.callType || "video";
+    const chatId = callData.chatId;
     setCallData(null);
 
-    navigate(`/video-chat?id=${roomId}`);
+    const url = new URL(window.location.origin);
+    url.pathname = "/video-chat";
+    url.searchParams.set("id", roomId);
+    url.searchParams.set("mode", mode);
+    if (chatId) url.searchParams.set("chatId", chatId);
+    navigate(url.pathname + url.search);
   };
 
   const handleDecline = async () => {
     if (!user?.uid || !callData) return;
 
+    websocketService.sendCallDecline(
+      callData.callerId,
+      callData.roomId,
+      callData.chatId
+    );
+    if (callData.chatId) {
+      websocketService.sendMessage(
+        callData.chatId,
+        "Đã từ chối cuộc gọi",
+        "call"
+      );
+    }
     setCallData(null);
   };
 
@@ -129,7 +150,15 @@ const IncomingCallDialog = () => {
                   {callData.callerName}
                 </h3>
                 <p className="text-sm text-gray-500 flex items-center gap-1">
-                  <Video className="w-3 h-3" /> Incoming Video Call...
+                  {callData.callType === "audio" ? (
+                    <>
+                      <Phone className="w-3 h-3" /> Incoming Audio Call...
+                    </>
+                  ) : (
+                    <>
+                      <Video className="w-3 h-3" /> Incoming Video Call...
+                    </>
+                  )}
                 </p>
               </div>
             </div>

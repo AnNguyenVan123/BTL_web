@@ -8,7 +8,7 @@ import {
   SmileOutlined,
   FileImageOutlined,
 } from "@ant-design/icons";
-import { Input, Image, Avatar } from "antd";
+import { Input, Image, Avatar, Popover, Button } from "antd";
 
 import { storage, db } from "../lib/firebase";
 import { doc, getDoc } from "firebase/firestore";
@@ -33,6 +33,7 @@ export default function Chat() {
   const [viewingSnap, setViewingSnap] = useState(null);
   const [chatMetadata, setChatMetadata] = useState(null);
   const [memberDetails, setMemberDetails] = useState({});
+  const [openDeleteId, setOpenDeleteId] = useState(null);
 
   const inputRef = useRef(null);
   const messagesEndRef = useRef(null);
@@ -156,6 +157,16 @@ export default function Chat() {
       }
     });
 
+    const unsubscribeMessageDeleted = websocketService.onMessageDeleted(
+      (data) => {
+        if (data.chatId === currentChatId) {
+          setMessages((prev) =>
+            prev.filter((msg) => msg.id !== data.messageId)
+          );
+        }
+      }
+    );
+
     const unsubscribeSnapViewed = websocketService.onSnapViewed((data) => {
       if (data.chatId === currentChatId) {
         setMessages((prev) =>
@@ -222,6 +233,7 @@ export default function Chat() {
     return () => {
       console.log(`🧹 Cleaning up chat ${currentChatId}`);
       unsubscribeNewMessage();
+      if (unsubscribeMessageDeleted) unsubscribeMessageDeleted();
       unsubscribeSnapViewed();
       unsubscribeError();
       unsubscribeJoinedChat();
@@ -361,7 +373,10 @@ export default function Chat() {
         <div className="h-screen relative flex flex-col">
           <AddUser />
           <div className="p-2 bg-[#121212] flex-1 flex flex-col min-h-0">
-            <Header setClose={setClose} receiver={currentChatInfo} />
+            <Header
+              setClose={setClose}
+              receiver={{ ...currentChatInfo, chatId: selectedChatId }}
+            />
             <div className="p-3 border-gray-700 rounded-2xl bg-[#1E1E1E] flex-1 flex flex-col min-h-0">
               <div
                 ref={messagesContainerRef}
@@ -383,12 +398,12 @@ export default function Chat() {
                           m.viewedBy && m.viewedBy.includes(user.uid);
                         return (
                           <div
-                            key={i}
+                            key={m.id || i}
                             className={`flex gap-2 max-w-[80%] ${
                               isOwner
                                 ? "self-end flex-row-reverse"
                                 : "self-start"
-                            }`}
+                            } relative`}
                           >
                             <Avatar
                               src={
@@ -465,6 +480,46 @@ export default function Chat() {
                                   ""}
                               </div>
                             </div>
+
+                            {isOwner && m.id && (
+                              <Popover
+                                content={
+                                  <Button
+                                    type="text"
+                                    danger
+                                    size="small"
+                                    onClick={() => {
+                                      websocketService.deleteMessage(
+                                        selectedChatId,
+                                        m.id
+                                      );
+                                      setOpenDeleteId(null);
+                                    }}
+                                  >
+                                    Xóa
+                                  </Button>
+                                }
+                                trigger="click"
+                                open={openDeleteId === m.id}
+                                onOpenChange={(open) =>
+                                  setOpenDeleteId(open ? m.id : null)
+                                }
+                                placement={isOwner ? "left" : "right"}
+                              >
+                                <button
+                                  className="absolute -top-2 text-gray-400 hover:text-white text-xs"
+                                  style={isOwner ? { left: -20 } : { right: -20 }}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setOpenDeleteId(
+                                      openDeleteId === m.id ? null : m.id
+                                    );
+                                  }}
+                                >
+                                  ⋯
+                                </button>
+                              </Popover>
+                            )}
                           </div>
                         );
                       })
