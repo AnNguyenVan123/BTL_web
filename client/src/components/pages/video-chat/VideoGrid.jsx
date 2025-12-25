@@ -16,6 +16,8 @@ const VideoGrid = ({ isCameraOff }) => {
           isMe: true,
           stream: mainStream,
           isCameraOff: !data.video,
+          name: data.displayName || "Anonymous",
+          photoURL: data.photoURL,
         }))
       : []),
     ...Object.entries(participants).map(([id, data]) => {
@@ -27,6 +29,8 @@ const VideoGrid = ({ isCameraOff }) => {
         isMe: false,
         stream: data.stream,
         isCameraOff: !data.video,
+        name: data.displayName || "Anonymous",
+        photoURL: data.photoURL,
       };
     }),
   ];

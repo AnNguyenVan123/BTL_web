@@ -113,6 +113,23 @@ io.on("connection", (socket) => {
     );
   });
 
+  // Handle call cancellation before it is answered
+  socket.on("cancel-call", (data) => {
+    const { targetUserId, roomId } = data || {};
+    if (!targetUserId) {
+      console.warn("⚠️ [SERVER] cancel-call missing targetUserId");
+      return;
+    }
+
+    console.log(
+      `📞 [SERVER] Cancel-call from ${userId} to ${targetUserId} for room ${roomId}`
+    );
+    io.to(`user:${targetUserId}`).emit("call-cancelled", {
+      callerId: userId,
+      roomId,
+    });
+  });
+
   // ========== CHAT EVENTS ==========
 
   // Join chat room
@@ -471,28 +488,43 @@ io.on("connection", (socket) => {
   // ========== WEBRTC SIGNALING EVENTS ==========
 
   // Join video call room
-  socket.on("join-video-room", async (roomId) => {
+  socket.on("join-video-room", async (payload, legacyProfile) => {
+    // Support both: emit("join-video-room", roomId) and emit("join-video-room", {roomId, profile})
+    const isStringPayload = typeof payload === "string";
+    const roomId = isStringPayload ? payload : payload?.roomId;
+    const profile =
+      (!isStringPayload && payload?.profile) ||
+      (legacyProfile && typeof legacyProfile === "object" ? legacyProfile : {}) ||
+      {};
+    if (!roomId) {
+      console.warn("⚠️ [SERVER] join-video-room missing roomId");
+      return;
+    }
     try {
       socket.join(`video-room:${roomId}`);
 
       if (!activeRooms.has(roomId)) {
-        activeRooms.set(roomId, new Set());
+        activeRooms.set(roomId, new Map());
       }
-      activeRooms.get(roomId).add(socket.id);
+      activeRooms
+        .get(roomId)
+        .set(socket.id, {
+          userId,
+          socketId: socket.id,
+          displayName: profile.displayName,
+          photoURL: profile.photoURL,
+        });
 
       // Notify others in the room
       socket.to(`video-room:${roomId}`).emit("user-joined", {
         userId,
         socketId: socket.id,
+        displayName: profile.displayName,
+        photoURL: profile.photoURL,
       });
 
       // Get list of participants
-      const participants = Array.from(activeRooms.get(roomId))
-        .map((sid) => {
-          const s = io.sockets.sockets.get(sid);
-          return s ? { userId: s.userId, socketId: sid } : null;
-        })
-        .filter(Boolean);
+      const participants = Array.from(activeRooms.get(roomId).values());
 
       socket.emit("room-participants", { participants });
     } catch (error) {
@@ -506,8 +538,9 @@ io.on("connection", (socket) => {
     socket.leave(`video-room:${roomId}`);
 
     if (activeRooms.has(roomId)) {
-      activeRooms.get(roomId).delete(socket.id);
-      if (activeRooms.get(roomId).size === 0) {
+      const room = activeRooms.get(roomId);
+      room.delete(socket.id);
+      if (room.size === 0) {
         activeRooms.delete(roomId);
       }
     }

@@ -1,9 +1,10 @@
 import { useEffect, useRef } from "react";
 import { motion } from "framer-motion";
-import { Mic, MicOff, VideoOff, User } from "lucide-react";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Mic, MicOff, VideoOff } from "lucide-react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 const VideoTile = ({ participant, isMe, isCameraOff }) => {
+  console.log(participant);
   const videoRef = useRef(null);
 
   const getInitials = (name) => {
@@ -32,6 +33,7 @@ const VideoTile = ({ participant, isMe, isCameraOff }) => {
           // Fallback Avatar View
           <div className="flex items-center justify-center h-full">
             <Avatar className="w-24 h-24 md:w-32 md:h-32 border-4 border-white">
+              <AvatarImage src={participant.photoURL} />
               <AvatarFallback className="bg-linear-to-br from-yellow-500 to-blue-500 text-white text-3xl md:text-4xl font-bold">
                 {getInitials(participant.displayName || participant.name)}
               </AvatarFallback>
@@ -57,7 +59,7 @@ const VideoTile = ({ participant, isMe, isCameraOff }) => {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className="text-white font-bold text-sm md:text-base drop-shadow-lg">
-              {participant.name}
+              {participant.displayName || participant.name || "Anonymous"}
             </span>
             {isMe && (
               <span className="bg-yellow-400 text-black text-xs font-bold px-2 py-0.5 rounded-full">

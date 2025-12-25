@@ -200,9 +200,10 @@ class WebSocketService {
 
   // ========== WEBRTC METHODS ==========
 
-  joinVideoRoom(roomId) {
+  joinVideoRoom(roomId, profile = {}) {
     if (!this.socket?.connected) return;
-    this.socket.emit("join-video-room", roomId);
+    // Send payload object (new format) while remaining compatible with legacy server handlers
+    this.socket.emit("join-video-room", { roomId, profile });
   }
 
   leaveVideoRoom(roomId) {
@@ -252,6 +253,17 @@ class WebSocketService {
     console.log(`✅ [CLIENT] incoming-call event emitted`);
   }
 
+  // Cancel outgoing call before it is answered
+  sendCallCancel(targetUserId, roomId) {
+    if (!this.socket?.connected) {
+      console.warn("⚠️ Socket not connected, cannot cancel call");
+      return;
+    }
+    const payload = { targetUserId, roomId };
+    console.log("📞 [CLIENT] Cancelling call:", payload);
+    this.socket.emit("cancel-call", payload);
+  }
+
   // Listen for incoming calls
   onIncomingCall(callback) {
     if (!this.socket) {
@@ -262,14 +274,37 @@ class WebSocketService {
     }
 
     console.log("✅ [CLIENT] Setting up incoming-call listener");
-    this.socket.on("incoming-call", (data) => {
+    const handler = (data) => {
       console.log("📞 [CLIENT] Received incoming-call event:", data);
       callback(data);
-    });
+    };
+    this.socket.on("incoming-call", handler);
 
     return () => {
       console.log("🗑️ [CLIENT] Removing incoming-call listener");
-      this.socket.off("incoming-call", callback);
+      this.socket.off("incoming-call", handler);
+    };
+  }
+
+  // Listen for caller cancellations
+  onCallCancelled(callback) {
+    if (!this.socket) {
+      console.warn(
+        "⚠️ Socket not initialized, cannot setup call-cancelled listener"
+      );
+      return () => {};
+    }
+
+    console.log("✅ [CLIENT] Setting up call-cancelled listener");
+    const handler = (data) => {
+      console.log("📞 [CLIENT] Received call-cancelled event:", data);
+      callback(data);
+    };
+    this.socket.on("call-cancelled", handler);
+
+    return () => {
+      console.log("🗑️ [CLIENT] Removing call-cancelled listener");
+      this.socket.off("call-cancelled", handler);
     };
   }
 
