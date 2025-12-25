@@ -1,183 +1,268 @@
 import React, { useEffect, useState } from "react";
-import { useAuth } from "../context/AuthContext";
+import { useAuth } from "../context/AuthContext"; // Ensure path is correct
 import { doc, getDoc, updateDoc } from "firebase/firestore";
 import { updateProfile } from "firebase/auth";
-import { db } from "../lib/firebase";
+import { db } from "../lib/firebase"; // Ensure path is correct
 import { Link, useNavigate } from "react-router-dom";
-import { ArrowLeft, Camera, Settings, Users, Flame } from "lucide-react";
+import { 
+  ArrowLeft, 
+  Camera, 
+  Settings, 
+  Users, 
+  Flame, 
+  Share2, 
+  Plus, 
+  Eye,
+  Loader2
+} from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 
+// Keep Antd for logic if you prefer, or replace with custom toasts later
 import { Upload, message } from "antd";
-import upload from "../lib/upload";
-
-// Import AddFriendModal
-import AddFriendModal from "../components/pages/friends/AddFriendModal";
+import upload from "../lib/upload"; // Ensure path is correct
+import AddFriendModal from "../components/pages/friends/AddFriendModal"; // Ensure path is correct
 
 export default function ProfilePage() {
   const { user, setUser } = useAuth();
   const [userData, setUserData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
   const navigate = useNavigate();
   const [isAddFriendOpen, setIsAddFriendOpen] = useState(false);
 
-  const handleChangeAvatar = async (file) => {
-    if (!file) return;
-    try {
-      const imgUrl = await upload(file);
-      const userRef = doc(db, "users", user.uid);
-      await updateDoc(userRef, {
-        photoURL: imgUrl,
-      });
-      setUserData((prev) => ({
-        ...prev,
-        photoURL: imgUrl,
-      }));
-      updateProfile(user, {
-        photoURL: imgUrl,
-      });
-      setUser(() => ({
-        ...user,
-        photoURL: imgUrl,
-      }));
-    } catch (err) {
-      console.error("Upload avatar error:", err);
+  // Animation variants
+  const containerVariants = {
+    hidden: { opacity: 0, y: 20 },
+    visible: { 
+      opacity: 1, 
+      y: 0,
+      transition: { duration: 0.5, staggerChildren: 0.1 }
     }
+  };
+
+  const itemVariants = {
+    hidden: { opacity: 0, y: 10 },
+    visible: { opacity: 1, y: 0 }
   };
 
   useEffect(() => {
     if (!user) return;
     const fetchUserData = async () => {
-      const snap = await getDoc(doc(db, "users", user.uid));
-      if (snap.exists()) setUserData(snap.data());
+      try {
+        const snap = await getDoc(doc(db, "users", user.uid));
+        if (snap.exists()) {
+          setUserData(snap.data());
+        }
+      } catch (error) {
+        console.error("Error fetching user data:", error);
+      } finally {
+        setLoading(false);
+      }
     };
     fetchUserData();
   }, [user]);
 
+  const handleChangeAvatar = async (file) => {
+    if (!file) return;
+    setUploading(true);
+    try {
+      const imgUrl = await upload(file);
+      const userRef = doc(db, "users", user.uid);
+      
+      await updateDoc(userRef, { photoURL: imgUrl });
+      await updateProfile(user, { photoURL: imgUrl });
+      
+      setUserData((prev) => ({ ...prev, photoURL: imgUrl }));
+      setUser((prev) => ({ ...prev, photoURL: imgUrl }));
+      
+      message.success("Avatar updated successfully!");
+    } catch (err) {
+      console.error("Upload avatar error:", err);
+      message.error("Failed to update avatar");
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const handleCopyProfileLink = async () => {
-    const link =
-      typeof window !== "undefined" ? window.location.href : `/profile`;
+    const link = typeof window !== "undefined" ? window.location.href : `/profile`;
     try {
       await navigator.clipboard.writeText(link);
       message.success("Profile link copied!");
     } catch (err) {
-      try {
-        const textarea = document.createElement("textarea");
-        textarea.value = link;
-        document.body.appendChild(textarea);
-        textarea.select();
-        document.execCommand("copy");
-        document.body.removeChild(textarea);
-        message.success("Profile link copied!");
-      } catch (e) {
-        message.error("Cannot copy profile link.");
-      }
+       message.error("Cannot copy profile link.");
     }
   };
 
-  if (!user)
-    return <p className="text-center mt-10">⚠️ You are not logged in.</p>;
-  if (!userData) return <p className="text-center mt-10">Loading...</p>;
+  if (!user) return (
+    <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <div className="text-center">
+            <p className="text-xl font-semibold text-slate-600">⚠️ You are not logged in.</p>
+            <button onClick={() => navigate("/login")} className="mt-4 text-indigo-600 hover:underline">Go to Login</button>
+        </div>
+    </div>
+  );
+
+  if (loading || !userData) return (
+    <div className="min-h-screen flex items-center justify-center bg-slate-50">
+      <Loader2 className="w-10 h-10 animate-spin text-indigo-500" />
+    </div>
+  );
 
   return (
-    <div className="bg-[#fffefb] text-gray-800 p-10">
-      {/* Header */}
-      <div className="sticky top-0 bg-white border-b border-gray-100 shadow-sm z-10">
-        <div className="max-w-3xl mx-auto flex items-center justify-between px-4 sm:px-6 md:px-8 py-4">
-          <button
+    <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-pink-50 relative overflow-x-hidden">
+      
+      {/* Background Decor */}
+      <div className="fixed top-[-10%] left-[-10%] w-96 h-96 bg-purple-200/30 rounded-full blur-3xl pointer-events-none" />
+      <div className="fixed bottom-[-10%] right-[-10%] w-96 h-96 bg-indigo-200/30 rounded-full blur-3xl pointer-events-none" />
+
+      {/* Header / Nav */}
+      {/* <div className="sticky top-0 z-20 backdrop-blur-md bg-white/70 border-b border-white/20">
+        <div className="max-w-3xl mx-auto px-4 py-4 flex items-center justify-between">
+          <motion.button
+            whileHover={{ scale: 1.1 }}
+            whileTap={{ scale: 0.9 }}
             onClick={() => navigate(-1)}
-            className="p-2 rounded-full hover:bg-gray-100 transition"
+            className="p-2 rounded-full bg-white/50 hover:bg-white shadow-sm border border-slate-100 text-slate-600 transition"
           >
-            <ArrowLeft className="w-5 h-5 text-gray-600" />
-          </button>
+            <ArrowLeft className="w-5 h-5" />
+          </motion.button>
 
-          <h1 className="text-lg sm:text-xl md:text-2xl font-bold">Profile</h1>
+          <span className="font-bold text-slate-800 tracking-tight">Profile</span>
 
-          <Link
-            to="/settings"
-            className="p-2 rounded-full text-yellow-500 font-semibold hover:text-yellow-600 transition"
-          >
-            <Settings className="w-6 h-6 sm:w-7 sm:h-7" />
+          <Link to="/settings">
+            <motion.div
+              whileHover={{ rotate: 90 }}
+              transition={{ duration: 0.3 }}
+              className="p-2 rounded-full bg-white/50 hover:bg-white shadow-sm border border-slate-100 text-slate-600 hover:text-indigo-600"
+            >
+              <Settings className="w-5 h-5" />
+            </motion.div>
           </Link>
         </div>
-      </div>
+      </div> */}
 
-      {/* Avatar + Info */}
-      <div className="max-w-3xl mx-auto flex flex-col items-center mt-8 px-4 sm:px-6 md:px-8">
-        <div className="relative">
-          <div className="rounded-4xl border-4 border-yellow-400 shadow-md overflow-hidden">
-            <img
-              src={userData.photoURL || "/default-avatar.png"}
-              alt="Avatar"
-              className="w-28 h-28 sm:w-32 sm:h-32 md:w-36 md:h-36 object-cover"
-            />
-          </div>
-          <Upload
-            accept="image/*"
-            showUploadList={false}
-            beforeUpload={(file) => {
-              handleChangeAvatar(file);
-              return false;
-            }}
-          >
-            <button className="absolute bottom-2 right-2 bg-linear-to-tr from-yellow-400 to-yellow-300 text-white p-2 rounded-full shadow-md hover:scale-105 transition cursor-pointer">
-              <Camera className="w-4 h-4 sm:w-5 sm:h-5" />
-            </button>
-          </Upload>
+      <motion.div 
+        variants={containerVariants}
+        initial="hidden"
+        animate="visible"
+        className="max-w-xl mx-auto px-6 pb-20 pt-8"
+      >
+        
+        {/* Glass Card Container */}
+        <div className="bg-white/60 backdrop-blur-xl rounded-3xl shadow-xl border border-white p-8">
+            
+            {/* Avatar Section */}
+            <motion.div variants={itemVariants} className="flex flex-col items-center">
+                <div className="relative group">
+                    <div className="relative w-32 h-32 sm:w-40 sm:h-40 rounded-full p-1 bg-gradient-to-tr from-yellow-400 to-pink-500 shadow-lg">
+                        <div className="w-full h-full rounded-full border-4 border-white overflow-hidden bg-white relative">
+                            <img
+                                src={userData.photoURL || `https://ui-avatars.com/api/?name=${userData.displayName}&background=random`}
+                                alt="Avatar"
+                                className={`w-full h-full object-cover transition-opacity duration-300 ${uploading ? 'opacity-50' : 'opacity-100'}`}
+                            />
+                            {uploading && (
+                                <div className="absolute inset-0 flex items-center justify-center">
+                                    <Loader2 className="w-8 h-8 text-indigo-600 animate-spin" />
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                    
+                    <Upload
+                        accept="image/*"
+                        showUploadList={false}
+                        disabled={uploading}
+                        beforeUpload={(file) => {
+                            handleChangeAvatar(file);
+                            return false;
+                        }}
+                    >
+                        <motion.button 
+                            whileHover={{ scale: 1.1 }}
+                            whileTap={{ scale: 0.9 }}
+                            className="absolute bottom-1 right-1 bg-indigo-600 text-white p-2.5 rounded-full shadow-lg border-2 border-white hover:bg-indigo-700 transition cursor-pointer"
+                        >
+                            <Camera className="w-5 h-5" />
+                        </motion.button>
+                    </Upload>
+                </div>
+
+                <h2 className="text-2xl font-bold mt-4 text-slate-800">
+                    {userData.displayName || "Snap User"}
+                </h2>
+                <p className="text-slate-500 font-medium">
+                    {userData.email}
+                </p>
+            </motion.div>
+
+            {/* Stats Grid */}
+            <motion.div variants={itemVariants} className="grid grid-cols-2 gap-4 mt-8">
+                <div className="bg-orange-50/50 border border-orange-100 rounded-2xl p-4 text-center hover:bg-orange-50 transition-colors">
+                    <div className="w-10 h-10 bg-orange-100 text-orange-600 rounded-full flex items-center justify-center mx-auto mb-2">
+                        <Flame size={20} fill="currentColor" className="opacity-90" />
+                    </div>
+                    <p className="text-2xl font-bold text-slate-800">{userData.snapStreak || 0}</p>
+                    <p className="text-xs font-semibold text-orange-600 uppercase tracking-wide">Streak</p>
+                </div>
+
+                <div className="bg-blue-50/50 border border-blue-100 rounded-2xl p-4 text-center hover:bg-blue-50 transition-colors">
+                    <div className="w-10 h-10 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-2">
+                        <Users size={20} fill="currentColor" className="opacity-90" />
+                    </div>
+                    <p className="text-2xl font-bold text-slate-800">{userData.friendsCount || 0}</p>
+                    <p className="text-xs font-semibold text-blue-600 uppercase tracking-wide">Friends</p>
+                </div>
+            </motion.div>
+
+            {/* Action Buttons */}
+            <motion.div variants={itemVariants} className="mt-8 space-y-3">
+                <Link to="/settings" className="block">
+                    <motion.button
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                        className="w-full bg-slate-900 text-white py-3.5 rounded-xl font-semibold shadow-lg shadow-slate-200 flex items-center justify-center gap-2"
+                    >
+                        Edit Profile
+                    </motion.button>
+                </Link>
+
+                <div className="grid grid-cols-2 gap-3">
+                    <motion.button
+                        whileHover={{ scale: 1.02, backgroundColor: "#f1f5f9" }}
+                        whileTap={{ scale: 0.98 }}
+                        onClick={handleCopyProfileLink}
+                        className="bg-white border border-slate-200 text-slate-700 py-3 rounded-xl font-medium flex items-center justify-center gap-2 hover:shadow-sm transition-all"
+                    >
+                        <Share2 size={18} />
+                        Share
+                    </motion.button>
+
+                    <motion.button
+                        whileHover={{ scale: 1.02, backgroundColor: "#f1f5f9" }}
+                        whileTap={{ scale: 0.98 }}
+                        className="bg-white border border-slate-200 text-slate-700 py-3 rounded-xl font-medium flex items-center justify-center gap-2 hover:shadow-sm transition-all"
+                    >
+                        <Eye size={18} />
+                        My Story
+                    </motion.button>
+                </div>
+
+                <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => setIsAddFriendOpen(true)}
+                    className="w-full bg-indigo-50 text-indigo-600 border border-indigo-100 py-3.5 rounded-xl font-semibold flex items-center justify-center gap-2 mt-2 hover:bg-indigo-100 transition-colors"
+                >
+                    <Plus size={20} />
+                    Add New Friends
+                </motion.button>
+            </motion.div>
         </div>
+      </motion.div>
 
-        <h2 className="text-xl sm:text-2xl md:text-3xl font-semibold mt-4">
-          {userData.displayName || "Snap User"}
-        </h2>
-        <p className="text-gray-500 text-sm sm:text-base">{userData.email}</p>
-
-        {/* Stats */}
-        <div className="flex flex-col sm:flex-row justify-center gap-6 mt-6 w-full">
-          <div className="flex-1 text-center">
-            <div className="bg-orange-50 rounded-xl p-3 inline-block">
-              <Flame className="w-6 h-6 text-orange-500 mx-auto" />
-            </div>
-            <p className="text-sm text-gray-500 mt-1">Streak</p>
-            <p className="font-semibold text-lg">{userData.snapStreak || 0}</p>
-          </div>
-          <div className="flex-1 text-center">
-            <div className="bg-blue-50 rounded-xl p-3 inline-block">
-              <Users className="w-6 h-6 text-blue-500 mx-auto" />
-            </div>
-            <p className="text-sm text-gray-500 mt-1">Friends</p>
-            <p className="font-semibold text-lg">
-              {userData.friendsCount || 0}
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* Actions */}
-      <div className="max-w-3xl mx-auto mt-8 px-4 sm:px-6 md:px-8 space-y-3">
-        <Link
-          to="/settings"
-          className="block w-full bg-linear-to-r from-yellow-400 to-yellow-300 text-white text-center py-3 rounded-2xl font-semibold shadow-md hover:shadow-lg hover:scale-[1.01] transition"
-        >
-          Edit Profile
-        </Link>
-        <button
-          onClick={handleCopyProfileLink}
-          className="w-full bg-gray-100 text-gray-800 py-3 rounded-2xl font-medium hover:bg-gray-200 hover:scale-[1.01] transition"
-        >
-          Copy profile link
-        </button>
-
-        <button className="w-full bg-gray-100 text-gray-800 py-3 rounded-2xl font-medium hover:bg-gray-200 hover:scale-[1.01] transition">
-          View My Story
-        </button>
-
-        {/* Add Friends Button */}
-        <button
-          onClick={() => setIsAddFriendOpen(true)}
-          className="w-full bg-gray-100 text-gray-800 py-3 rounded-2xl font-medium hover:bg-gray-200 hover:scale-[1.01] transition"
-        >
-          Add Friends
-        </button>
-      </div>
-
-      {/* AddFriendModal */}
+      {/* AddFriendModal - Assuming this component handles its own internal rendering logic */}
       <AddFriendModal
         isOpen={isAddFriendOpen}
         onClose={() => setIsAddFriendOpen(false)}

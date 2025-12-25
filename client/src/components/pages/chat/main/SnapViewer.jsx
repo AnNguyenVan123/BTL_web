@@ -4,7 +4,6 @@ import { X, Clock } from "lucide-react";
 const SnapViewer = ({ imageSrc, onClose }) => {
   const [timeLeft, setTimeLeft] = useState(10);
   useEffect(() => {
-    // Tự động đóng sau 10 giây
     const timer = setInterval(() => {
       setTimeLeft((prev) => {
         if (prev <= 1) {
@@ -21,7 +20,6 @@ const SnapViewer = ({ imageSrc, onClose }) => {
 
   return (
     <div className="fixed inset-0 z-1000 bg-black flex items-center justify-center animate-in fade-in duration-300">
-      {/* Thanh progress bar đếm ngược (Optional) */}
       <div className="absolute top-0 left-0 h-1 bg-gray-800 w-full">
         <div
           className="h-full bg-white transition-all duration-1000 ease-linear"

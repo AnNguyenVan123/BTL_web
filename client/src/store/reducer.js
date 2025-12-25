@@ -26,7 +26,6 @@ export const userReducer = (state = defaultUserState, action) => {
   let payload = action.payload;
   if (action.type === SET_MAIN_STREAM) {
     state = { ...state, ...payload };
-    console.log("Main stream state: ", state);
     return state;
   } else if (action.type === ADD_PARTICIPANT) {
     const currentUserId = Object.keys(state.currentUser)[0];
@@ -78,11 +77,6 @@ export const userReducer = (state = defaultUserState, action) => {
     };
     let participants = { ...state.participants, ...payload.newUser };
     state = { ...state, participants };
-    console.log(
-      "Reducer Update Participant:",
-      newUserId,
-      payload.newUser[newUserId]
-    );
     return state;
   }
   return state;
