@@ -3,7 +3,8 @@ import { getAuth, GoogleAuthProvider } from "firebase/auth";
 import { getFirestore, connectFirestoreEmulator } from "firebase/firestore";
 import { getAnalytics, isSupported } from "firebase/analytics";
 import { getStorage } from "firebase/storage";
-import { getDatabase } from "firebase/database";
+// Realtime Database no longer used - using WebSocket instead
+// import { getDatabase } from "firebase/database";
 import { getFunctions, connectFunctionsEmulator } from "firebase/functions";
 
 // Cấu hình Firebase
@@ -19,16 +20,20 @@ const firebaseConfig = {
 };
 
 // Check if Firebase config is valid
-const isFirebaseConfigured = 
-  firebaseConfig.projectId && 
-  firebaseConfig.apiKey && 
+const isFirebaseConfigured =
+  firebaseConfig.projectId &&
+  firebaseConfig.apiKey &&
   firebaseConfig.authDomain;
 
 let app, db, rtdb, auth, googleProvider, storage, functions;
 
 if (!isFirebaseConfigured) {
-  console.warn("⚠️ Firebase is not configured. Please set up .env file with Firebase credentials.");
-  console.warn("📝 Copy .env.example to .env and fill in your Firebase project details.");
+  console.warn(
+    "⚠️ Firebase is not configured. Please set up .env file with Firebase credentials."
+  );
+  console.warn(
+    "📝 Copy .env.example to .env and fill in your Firebase project details."
+  );
   // Create dummy exports for development
   auth = null;
   googleProvider = null;
@@ -44,8 +49,9 @@ if (!isFirebaseConfigured) {
     // Khởi tạo Firestore
     db = getFirestore(app);
 
-    // Khởi tạo Realtime Database (cho signaling video call)
-    rtdb = getDatabase(app);
+    // Realtime Database no longer used - using WebSocket instead
+    // rtdb = getDatabase(app);
+    rtdb = null;
 
     // Khởi tạo Auth
     auth = getAuth(app);
@@ -65,8 +71,7 @@ if (!isFirebaseConfigured) {
         getAnalytics(app);
       }
     });
-    
-    console.log("✅ Firebase initialized successfully");
+
   } catch (error) {
     console.error("❌ Error initializing Firebase:", error);
     auth = null;
