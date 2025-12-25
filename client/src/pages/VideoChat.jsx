@@ -12,6 +12,8 @@ import {
   setUser,
   addParticipant,
   removeParticipant,
+  updateParticipant,
+  updateUser,
 } from "@/store/actioncreator";
 import { websocketService } from "@/lib/websocket";
 import { useAuth } from "@/context/AuthContext";
@@ -23,14 +25,42 @@ export default function VideoChat() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [searchParams] = useSearchParams();
   const roomId = searchParams.get("id");
+  const targetUserId = searchParams.get("target");
   const navigate = useNavigate();
   const streamRef = useRef(null);
+  const cancelSentRef = useRef(false);
+  const participantsRef = useRef({});
 
   const dispatch = useDispatch();
   const { user } = useAuth();
   const { participants, mainStream } = useSelector((state) => state.userState);
 
   const [messages] = useState([]);
+
+  const sendCancelIfNeeded = () => {
+    if (cancelSentRef.current) return;
+    if (targetUserId && roomId) {
+      websocketService.sendCallCancel(targetUserId, roomId);
+      cancelSentRef.current = true;
+    }
+  };
+
+  // Lắng nghe thay đổi media (audio/video) từ các user khác
+  useEffect(() => {
+    const unsubscribe = websocketService.onMediaPreferenceUpdated((data) => {
+      if (!data?.userId || !data.preference) return;
+
+      if (data.userId === user?.uid) {
+        dispatch(updateUser({ [data.userId]: data.preference }));
+      } else {
+        dispatch(updateParticipant({ [data.userId]: data.preference }));
+      }
+    });
+
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
+  }, [dispatch, user?.uid]);
 
   const toggleMic = () => {
     if (mainStream) {
@@ -64,7 +94,30 @@ export default function VideoChat() {
     }
   };
 
+  // Keep latest participants in a ref for timeout checks
+  useEffect(() => {
+    participantsRef.current = participants || {};
+  }, [participants]);
+
+  // Auto-cancel if callee does not join within 10 seconds
+  useEffect(() => {
+    if (!targetUserId || !roomId) return;
+
+    const timeoutId = setTimeout(() => {
+      const hasTarget = !!participantsRef.current[targetUserId];
+      if (!hasTarget) {
+        sendCancelIfNeeded();
+        navigate("/chat");
+        window.location.reload();
+      }
+    }, 10000);
+
+    return () => clearTimeout(timeoutId);
+  }, [targetUserId, roomId, navigate]);
+
   const performCleanup = async () => {
+    sendCancelIfNeeded();
+
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((track) => track.stop());
     }
@@ -103,23 +156,23 @@ export default function VideoChat() {
 
         const userId = user.uid;
         const displayName = user.displayName || "Anonymous";
+        const photoURL = user.photoURL || "/default-avatar.png";
         const userPayload = {
           [userId]: {
             displayName,
-            photoURL: user.photoURL || "/default-avatar.png",
+            photoURL,
             video: true,
             audio: true,
           },
         };
 
-        // Connect WebSocket and join video room
+        // Connect WebSocket
         await websocketService.connect();
-        websocketService.joinVideoRoom(roomId);
 
         // Dispatch SetUser kèm RoomID để khởi tạo listener offer/answer
         dispatch(setUser(userPayload, roomId));
 
-        // Set up WebSocket listeners for participants
+        // Set up WebSocket listeners for participants BEFORE joining room
         const unsubscribeUserJoined = websocketService.onUserJoined((data) => {
           if (data.userId !== userId) {
             dispatch(
@@ -167,6 +220,9 @@ export default function VideoChat() {
           }
         );
 
+        // Now join video room (profile included so peers get display info)
+        websocketService.joinVideoRoom(roomId, { displayName, photoURL });
+
         const handleBeforeUnload = (e) => {
           if (streamRef.current) {
             streamRef.current.getTracks().forEach((t) => t.stop());
@@ -179,6 +235,7 @@ export default function VideoChat() {
           unsubscribeUserJoined();
           unsubscribeUserLeft();
           unsubscribeRoomParticipants();
+          sendCancelIfNeeded();
           if (streamRef.current) {
             streamRef.current.getTracks().forEach((track) => track.stop());
           }

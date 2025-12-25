@@ -7,7 +7,13 @@ import {
   signOut,
 } from "firebase/auth";
 import { auth, googleProvider, db } from "../lib/firebase";
-import { doc, setDoc, getDoc, serverTimestamp } from "firebase/firestore";
+import {
+  doc,
+  setDoc,
+  getDoc,
+  onSnapshot,
+  serverTimestamp,
+} from "firebase/firestore";
 
 const AuthContext = createContext();
 
@@ -61,9 +67,23 @@ export function AuthProvider({ children }) {
     }
 
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      setUser(currentUser);
+      // setUser(currentUser);
       if (currentUser) {
-        await syncUserData(currentUser);
+        const userRef = doc(db, "users", currentUser.uid);
+        const unsubscribeFirestore = onSnapshot(userRef, (docSnap) => {
+          if (docSnap.exists()) {
+            setUser({
+              ...currentUser,
+              ...docSnap.data(),
+            });
+          } else {
+            setUser(currentUser);
+          }
+          setLoading(false);
+        });
+        return () => {
+          unsubscribeFirestore();
+        };
       }
       setLoading(false);
     });
