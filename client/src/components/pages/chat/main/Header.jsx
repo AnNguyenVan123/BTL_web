@@ -5,8 +5,7 @@ import {
   VideoCameraFilled,
 } from "@ant-design/icons";
 
-import { rtdb } from "../../../../lib/firebase";
-import { ref, set } from "firebase/database";
+import { websocketService } from "../../../../lib/websocket";
 import { v4 as uuidv4 } from "uuid";
 
 import { useAuth } from "../../../../context/AuthContext";
@@ -15,12 +14,9 @@ export default function Header({ setClose, receiver }) {
   const navigate = useNavigate();
   const { user } = useAuth();
 
-  // Hàm gọi điện
   const callUser = async (currentUser, targetUserId) => {
-    // 1. Tạo Room ID mới
     const newRoomId = uuidv4();
 
-    // 2. Chuẩn bị dữ liệu cuộc gọi
     const callPayload = {
       callerId: currentUser.uid,
       callerName: currentUser.displayName || "Anonymous",
@@ -29,19 +25,21 @@ export default function Header({ setClose, receiver }) {
       timestamp: Date.now(),
     };
 
-    // 3. Ghi vào nhánh incomingCall của NGƯỜI NHẬN (targetUserId)
     try {
-      const targetRef = ref(rtdb, `users/${targetUserId}/incomingCall`);
-      await set(targetRef, callPayload);
+      if (!websocketService.isConnected) {
+        await websocketService.connect();
+      } else {
+      }
 
-      // 4. Tự động chuyển người gọi vào phòng luôn để chờ
+      await new Promise((resolve) => setTimeout(resolve, 200));
+
+      websocketService.sendIncomingCall(targetUserId, callPayload);
+
+      await new Promise((resolve) => setTimeout(resolve, 300));
+
       navigate(`/video-chat?id=${newRoomId}`);
     } catch (error) {
-      console.error("Không thể thực hiện cuộc gọi:", error);
-      alert({
-        title: "Lỗi",
-        description: "Không thể kết nối tới người dùng này.",
-      });
+      alert("Không thể kết nối tới người dùng này.");
     }
   };
   return (

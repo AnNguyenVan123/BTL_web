@@ -26,46 +26,131 @@ const ARView = forwardRef(({ isFrontCamera, zoom, filter, isActive }, ref) => {
 
     if (canvas && video && video.readyState === 4) {
       const ctx = canvas.getContext("2d");
-      const { width, height } = canvas;
+      const canvasWidth = canvas.width;
+      const canvasHeight = canvas.height;
+      const videoWidth = video.videoWidth;
+      const videoHeight = video.videoHeight;
 
-      ctx.clearRect(0, 0, width, height);
+      ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+
+      const videoAspect = videoWidth / videoHeight;
+      const canvasAspect = canvasWidth / canvasHeight;
+
+      let drawWidth, drawHeight, drawX, drawY;
+
+      if (videoAspect > canvasAspect) {
+        drawHeight = canvasHeight;
+        drawWidth = drawHeight * videoAspect;
+        drawX = (canvasWidth - drawWidth) / 2;
+        drawY = 0;
+      } else {
+        drawWidth = canvasWidth;
+        drawHeight = drawWidth / videoAspect;
+        drawX = 0;
+        drawY = (canvasHeight - drawHeight) / 2;
+      }
 
       ctx.save();
       if (isFrontCamera) {
         ctx.scale(-1, 1);
-        ctx.drawImage(video, -width, 0, width, height);
+        ctx.drawImage(video, -drawX - drawWidth, drawY, drawWidth, drawHeight);
       } else {
-        ctx.drawImage(video, 0, 0, width, height);
+        ctx.drawImage(video, drawX, drawY, drawWidth, drawHeight);
       }
       ctx.restore();
 
       if (latestLandmarksRef.current) {
         const landmarks = latestLandmarksRef.current;
-        drawFilter(ctx, landmarks, filter, width, height, isFrontCamera);
+        const scaleX = drawWidth / videoWidth;
+        const scaleY = drawHeight / videoHeight;
+        const offsetX = drawX;
+        const offsetY = drawY;
+
+        drawFilter(
+          ctx,
+          landmarks,
+          filter,
+          canvasWidth,
+          canvasHeight,
+          isFrontCamera,
+          {
+            scaleX,
+            scaleY,
+            offsetX,
+            offsetY,
+            videoWidth,
+            videoHeight,
+          }
+        );
       }
     }
 
     if (isActive) requestAnimationFrame(drawScene);
   }, [filter, isFrontCamera, isActive]);
 
-  const drawFilter = (ctx, landmarks, type, width, height, isFront) => {
+  const drawFilter = (
+    ctx,
+    landmarks,
+    type,
+    width,
+    height,
+    isFront,
+    transform = null
+  ) => {
     if (type === "none") return;
 
-    // Helper tính tọa độ X (đã xử lý lật hình)
-    const getX = (val) => (isFront ? (1 - val) * width : val * width);
-    const getY = (val) => val * height;
+    const getX = (val) => {
+      if (transform) {
+        const videoX = val * transform.videoWidth;
+        const canvasX = videoX * transform.scaleX + transform.offsetX;
+        return isFront ? width - canvasX : canvasX;
+      }
+      return isFront ? (1 - val) * width : val * width;
+    };
+
+    const getY = (val) => {
+      if (transform) {
+        const videoY = val * transform.videoHeight;
+        return videoY * transform.scaleY + transform.offsetY;
+      }
+      return val * height;
+    };
 
     if (type === "mesh") {
       ctx.fillStyle = "#00FF00";
       landmarks.forEach((pt) => ctx.fillRect(getX(pt.x), getY(pt.y), 2, 2));
     } else if (type === "clown") {
       const nose = landmarks[1];
+      let noseRadius = 10;
+
+      if (landmarks.length > 33 && landmarks.length > 263) {
+        const leftEye = landmarks[33];
+        const rightEye = landmarks[263];
+        const eyeDistance = Math.sqrt(
+          Math.pow(getX(rightEye.x) - getX(leftEye.x), 2) +
+            Math.pow(getY(rightEye.y) - getY(leftEye.y), 2)
+        );
+
+        noseRadius = eyeDistance * 0.2;
+      }
+
       ctx.beginPath();
-      ctx.arc(getX(nose.x), getY(nose.y), 30, 0, 2 * Math.PI);
-      ctx.fillStyle = "rgba(255, 0, 0, 0.9)";
+      ctx.arc(getX(nose.x), getY(nose.y), noseRadius, 0, 2 * Math.PI);
+
+      const gradient = ctx.createRadialGradient(
+        getX(nose.x) - noseRadius / 3,
+        getY(nose.y) - noseRadius / 3,
+        noseRadius / 5,
+        getX(nose.x),
+        getY(nose.y),
+        noseRadius
+      );
+      gradient.addColorStop(0, "#ffcccc");
+      gradient.addColorStop(1, "red");
+
+      ctx.fillStyle = gradient;
       ctx.fill();
     }
-    // ... Thêm các filter khác tương tự
   };
 
   useEffect(() => {
@@ -90,21 +175,37 @@ const ARView = forwardRef(({ isFrontCamera, zoom, filter, isActive }, ref) => {
     });
 
     let camera;
+    let setupTimeout;
+
     if (webcamRef.current && webcamRef.current.video) {
-      camera = new Camera(webcamRef.current.video, {
-        onFrame: async () => {
-          if (webcamRef.current?.video) {
-            await faceMesh.send({ image: webcamRef.current.video });
-          }
-        },
-        width: 1280,
-        height: 720,
-      });
-      camera.start();
-      requestAnimationFrame(drawScene);
+      const setupCamera = () => {
+        const video = webcamRef.current?.video;
+        if (!video || video.readyState < 2) {
+          setupTimeout = setTimeout(setupCamera, 100);
+          return;
+        }
+
+        const videoWidth = video.videoWidth || 720;
+        const videoHeight = video.videoHeight || 1280;
+
+        camera = new Camera(webcamRef.current.video, {
+          onFrame: async () => {
+            if (webcamRef.current?.video) {
+              await faceMesh.send({ image: webcamRef.current.video });
+            }
+          },
+          width: videoWidth,
+          height: videoHeight,
+        });
+        camera.start();
+        requestAnimationFrame(drawScene);
+      };
+
+      setupCamera();
     }
 
     return () => {
+      if (setupTimeout) clearTimeout(setupTimeout);
       if (camera) camera.stop();
       faceMesh.close();
     };
