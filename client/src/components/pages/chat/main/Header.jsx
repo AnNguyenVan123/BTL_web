@@ -14,7 +14,12 @@ export default function Header({ setClose, receiver }) {
   const navigate = useNavigate();
   const { user } = useAuth();
 
-  const callUser = async (currentUser, targetUserId) => {
+  const callUser = async (
+    currentUser,
+    targetUserId,
+    callType = "video",
+    chatId = null
+  ) => {
     const newRoomId = uuidv4();
 
     const callPayload = {
@@ -23,6 +28,8 @@ export default function Header({ setClose, receiver }) {
       callerPhoto: currentUser.photoURL || "/default-avatar.png",
       roomId: newRoomId,
       timestamp: Date.now(),
+      callType,
+      chatId,
     };
 
     try {
@@ -37,7 +44,13 @@ export default function Header({ setClose, receiver }) {
 
       await new Promise((resolve) => setTimeout(resolve, 300));
 
-      navigate(`/video-chat?id=${newRoomId}&target=${targetUserId}`);
+      const url = new URL(window.location.origin);
+      url.pathname = "/video-chat";
+      url.searchParams.set("id", newRoomId);
+      url.searchParams.set("target", targetUserId);
+      url.searchParams.set("mode", callType);
+      if (chatId) url.searchParams.set("chatId", chatId);
+      navigate(url.pathname + url.search);
     } catch (error) {
       alert("Không thể kết nối tới người dùng này.");
     }
@@ -64,13 +77,20 @@ export default function Header({ setClose, receiver }) {
       </div>
       <div className="bg-[#292929] flex gap-4 p-4 rounded-4xl text-white items-center">
         <p className="text-lg font-medium mr-3">Call</p>
-        <PhoneFilled style={{ fontSize: 18, cursor: "pointer" }} />
+        <PhoneFilled
+          style={{ fontSize: 18, cursor: "pointer" }}
+          title="Audio Call"
+          onClick={(e) => {
+            e.stopPropagation();
+            callUser(user, receiver.uid, "audio", receiver?.chatId);
+          }}
+        />
         <VideoCameraFilled
           style={{ fontSize: 18, cursor: "pointer" }}
           title="Video Call"
           onClick={(e) => {
             e.stopPropagation();
-            callUser(user, receiver.uid);
+            callUser(user, receiver.uid, "video", receiver?.chatId);
           }}
         />
       </div>

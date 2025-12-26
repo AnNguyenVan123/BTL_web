@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import { Helmet } from "react-helmet";
@@ -7,6 +7,7 @@ import ControlPanel from "@/components/pages/video-chat/ControlPanel";
 import ParticipantsSidebar from "@/components/pages/video-chat/ParticipantsSidebar";
 import ChatPanel from "@/components/pages/video-chat/ChatPanel";
 import { Toaster } from "@/components/ui/toaster";
+import { useToast } from "@/components/ui/use-toast";
 import {
   setMainStream,
   setUser,
@@ -26,14 +27,25 @@ export default function VideoChat() {
   const [searchParams] = useSearchParams();
   const roomId = searchParams.get("id");
   const targetUserId = searchParams.get("target");
+  const mode = searchParams.get("mode") || "video";
+  const isAudioOnly = mode === "audio";
+  const chatId = searchParams.get("chatId");
   const navigate = useNavigate();
   const streamRef = useRef(null);
   const cancelSentRef = useRef(false);
+  const callEndedSentRef = useRef(false);
   const participantsRef = useRef({});
+  const endingRef = useRef(false);
+  const startTimeRef = useRef(Date.now());
+  const otherUserIdRef = useRef(null);
+  const otherJoinedRef = useRef(false);
+  const callEndLoggedRef = useRef(false);
+  const callLoggedRef = useRef(false);
 
   const dispatch = useDispatch();
   const { user } = useAuth();
   const { participants, mainStream } = useSelector((state) => state.userState);
+  const { toast, toasts } = useToast();
 
   const [messages] = useState([]);
 
@@ -43,6 +55,34 @@ export default function VideoChat() {
       websocketService.sendCallCancel(targetUserId, roomId);
       cancelSentRef.current = true;
     }
+  };
+
+  const logCallEndedMessage = (durationSec) => {
+    if (!chatId || !otherJoinedRef.current || callEndLoggedRef.current) return;
+    const text = `Cuộc gọi đã kết thúc trong ${Math.max(
+      1,
+      Math.round(durationSec)
+    )}s`;
+    websocketService.sendMessage(chatId, text, "call");
+    callEndLoggedRef.current = true;
+  };
+
+  const sendCallEnd = (reasonText, durationSec) => {
+    if (callEndedSentRef.current) return;
+    callEndedSentRef.current = true;
+    const target = otherUserIdRef.current || targetUserId;
+    if (target && roomId) {
+      websocketService.sendCallEnd(target, roomId, chatId, {
+        reason: reasonText,
+        durationSec,
+      });
+    }
+  };
+
+  const logCallMessage = (text) => {
+    if (!chatId || callLoggedRef.current || !text) return;
+    websocketService.sendMessage(chatId, text, "call");
+    callLoggedRef.current = true;
   };
 
   // Lắng nghe thay đổi media (audio/video) từ các user khác
@@ -79,6 +119,7 @@ export default function VideoChat() {
   };
 
   const toggleCamera = () => {
+    if (isAudioOnly) return; // audio call không có camera
     if (mainStream) {
       const videoTrack = mainStream.getVideoTracks()[0];
       if (videoTrack) {
@@ -107,13 +148,19 @@ export default function VideoChat() {
       const hasTarget = !!participantsRef.current[targetUserId];
       if (!hasTarget) {
         sendCancelIfNeeded();
-        navigate("/chat");
-        window.location.reload();
+        endCall("Cuộc gọi không được trả lời", true, 0);
       }
     }, 10000);
 
     return () => clearTimeout(timeoutId);
   }, [targetUserId, roomId, navigate]);
+
+  // Nếu là audio-only thì tắt camera UI state
+  useEffect(() => {
+    if (isAudioOnly) {
+      setIsCameraOff(true);
+    }
+  }, [isAudioOnly]);
 
   const performCleanup = async () => {
     sendCancelIfNeeded();
@@ -125,12 +172,55 @@ export default function VideoChat() {
     if (roomId) {
       websocketService.leaveVideoRoom(roomId);
     }
+
+    // reset refs for next call
+    otherUserIdRef.current = null;
+    otherJoinedRef.current = false;
+    callEndLoggedRef.current = false;
+    callLoggedRef.current = false;
+    callEndedSentRef.current = false;
+    cancelSentRef.current = false;
+    startTimeRef.current = Date.now();
   };
 
-  const handleLeaveCall = async () => {
+  const clearToasts = useCallback(() => {
+    (toasts || []).forEach((t) => t?.dismiss?.());
+  }, [toasts]);
+
+  const endCall = async (message, reload = false, delayMs = 0) => {
+    if (endingRef.current) return;
+    endingRef.current = true;
+    if (message) {
+      toast({ title: message });
+    }
     await performCleanup();
-    navigate("/chat");
-    window.location.reload();
+    const doNavigate = () => {
+      clearToasts();
+      navigate("/chat", { replace: true });
+      if (reload) {
+        window.location.reload();
+      }
+    };
+    if (delayMs > 0) {
+      setTimeout(doNavigate, delayMs);
+    } else {
+      doNavigate();
+    }
+  };
+
+  // Clear stale toasts on unmount
+  useEffect(() => {
+    return () => clearToasts();
+  }, [clearToasts]);
+
+  const handleLeaveCall = async () => {
+    const durationSec = Math.max(
+      1,
+      Math.round((Date.now() - startTimeRef.current) / 1000)
+    );
+    logCallEndedMessage(durationSec);
+    sendCallEnd("caller-left", durationSec);
+    await endCall(null, true, 0);
   };
 
   // Khởi tạo video call khi component mount
@@ -146,7 +236,7 @@ export default function VideoChat() {
 
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
-          video: true,
+          video: !isAudioOnly,
           audio: true,
         });
         // Lưu vào Ref để dùng cho cleanup sau này
@@ -161,7 +251,7 @@ export default function VideoChat() {
           [userId]: {
             displayName,
             photoURL,
-            video: true,
+            video: !isAudioOnly,
             audio: true,
           },
         };
@@ -175,13 +265,15 @@ export default function VideoChat() {
         // Set up WebSocket listeners for participants BEFORE joining room
         const unsubscribeUserJoined = websocketService.onUserJoined((data) => {
           if (data.userId !== userId) {
+            otherUserIdRef.current = data.userId;
+            otherJoinedRef.current = true;
             dispatch(
               addParticipant(
                 {
                   [data.userId]: {
                     displayName: data.displayName || "Anonymous",
                     photoURL: data.photoURL || "/default-avatar.png",
-                    video: true,
+                    video: !isAudioOnly,
                     audio: true,
                   },
                 },
@@ -202,13 +294,15 @@ export default function VideoChat() {
             // Handle initial participants list
             data.participants.forEach((participant) => {
               if (participant.userId !== userId) {
+                otherUserIdRef.current = participant.userId;
+                otherJoinedRef.current = true;
                 dispatch(
                   addParticipant(
                     {
                       [participant.userId]: {
                         displayName: participant.displayName || "Anonymous",
                         photoURL: participant.photoURL || "/default-avatar.png",
-                        video: true,
+                        video: !isAudioOnly,
                         audio: true,
                       },
                     },
@@ -219,6 +313,23 @@ export default function VideoChat() {
             });
           }
         );
+
+        // Listen for callee decline to end call for caller
+        const unsubscribeCallDeclined = websocketService.onCallDeclined(
+          (data) => {
+            if (data?.roomId && data.roomId !== roomId) return;
+            endCall("Cuộc gọi đã bị từ chối", false, 1200);
+          }
+        );
+
+        const unsubscribeCallEnded = websocketService.onCallEnded((data) => {
+          if (data?.roomId && data.roomId !== roomId) return;
+          const duration =
+            data?.durationSec ||
+            Math.max(1, Math.round((Date.now() - startTimeRef.current) / 1000));
+          logCallEndedMessage(duration);
+          endCall("Cuộc gọi đã kết thúc", false, 500);
+        });
 
         // Now join video room (profile included so peers get display info)
         websocketService.joinVideoRoom(roomId, { displayName, photoURL });
@@ -235,6 +346,8 @@ export default function VideoChat() {
           unsubscribeUserJoined();
           unsubscribeUserLeft();
           unsubscribeRoomParticipants();
+          if (unsubscribeCallDeclined) unsubscribeCallDeclined();
+          if (unsubscribeCallEnded) unsubscribeCallEnded();
           sendCancelIfNeeded();
           if (streamRef.current) {
             streamRef.current.getTracks().forEach((track) => track.stop());
