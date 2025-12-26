@@ -8,7 +8,7 @@ import {
   SmileOutlined,
   FileImageOutlined,
 } from "@ant-design/icons";
-import { Input, Image, Avatar } from "antd";
+import { Input, Image, Avatar, Popover, Button } from "antd";
 
 import { storage, db } from "../lib/firebase";
 import { doc, getDoc } from "firebase/firestore";
@@ -33,6 +33,7 @@ export default function Chat() {
   const [viewingSnap, setViewingSnap] = useState(null);
   const [chatMetadata, setChatMetadata] = useState(null);
   const [memberDetails, setMemberDetails] = useState({});
+  const [openDeleteId, setOpenDeleteId] = useState(null);
 
   const inputRef = useRef(null);
   const messagesEndRef = useRef(null);
@@ -156,6 +157,16 @@ export default function Chat() {
       }
     });
 
+    const unsubscribeMessageDeleted = websocketService.onMessageDeleted(
+      (data) => {
+        if (data.chatId === currentChatId) {
+          setMessages((prev) =>
+            prev.filter((msg) => msg.id !== data.messageId)
+          );
+        }
+      }
+    );
+
     const unsubscribeSnapViewed = websocketService.onSnapViewed((data) => {
       if (data.chatId === currentChatId) {
         setMessages((prev) =>
@@ -222,6 +233,7 @@ export default function Chat() {
     return () => {
       console.log(`🧹 Cleaning up chat ${currentChatId}`);
       unsubscribeNewMessage();
+      if (unsubscribeMessageDeleted) unsubscribeMessageDeleted();
       unsubscribeSnapViewed();
       unsubscribeError();
       unsubscribeJoinedChat();
@@ -360,9 +372,12 @@ export default function Chat() {
       ) : (
         <div className="h-screen relative flex flex-col">
           <AddUser />
-          <div className="p-2 bg-[#121212] flex-1 flex flex-col min-h-0">
-            <Header setClose={setClose} receiver={currentChatInfo} />
-            <div className="p-3 border-gray-700 rounded-2xl bg-[#1E1E1E] flex-1 flex flex-col min-h-0">
+          <div className="p-2 sm:p-3 bg-[#121212] flex-1 flex flex-col min-h-0">
+            <Header
+              setClose={setClose}
+              receiver={{ ...currentChatInfo, chatId: selectedChatId }}
+            />
+            <div className="p-2 sm:p-3 border-gray-700 rounded-2xl bg-[#1E1E1E] flex-1 flex flex-col min-h-0">
               <div
                 ref={messagesContainerRef}
                 className="flex-1 overflow-y-auto min-h-0"
@@ -372,7 +387,7 @@ export default function Chat() {
                     Select a chat to start messaging
                   </div>
                 ) : (
-                  <div className="flex flex-col gap-2 p-2">
+                  <div className="flex flex-col gap-2 p-1 sm:p-2">
                     {messages.length === 0 ? (
                       <div className="text-gray-400">No messages yet</div>
                     ) : (
@@ -383,12 +398,12 @@ export default function Chat() {
                           m.viewedBy && m.viewedBy.includes(user.uid);
                         return (
                           <div
-                            key={i}
-                            className={`flex gap-2 max-w-[80%] ${
+                            key={m.id || i}
+                            className={`flex gap-2 max-w-full sm:max-w-[80%] ${
                               isOwner
                                 ? "self-end flex-row-reverse"
                                 : "self-start"
-                            }`}
+                            } relative`}
                           >
                             <Avatar
                               src={
@@ -465,6 +480,46 @@ export default function Chat() {
                                   ""}
                               </div>
                             </div>
+
+                            {isOwner && m.id && (
+                              <Popover
+                                content={
+                                  <Button
+                                    type="text"
+                                    danger
+                                    size="small"
+                                    onClick={() => {
+                                      websocketService.deleteMessage(
+                                        selectedChatId,
+                                        m.id
+                                      );
+                                      setOpenDeleteId(null);
+                                    }}
+                                  >
+                                    Xóa
+                                  </Button>
+                                }
+                                trigger="click"
+                                open={openDeleteId === m.id}
+                                onOpenChange={(open) =>
+                                  setOpenDeleteId(open ? m.id : null)
+                                }
+                                placement={isOwner ? "left" : "right"}
+                              >
+                                <button
+                                  className="absolute -top-2 text-gray-400 hover:text-white text-xs"
+                                  style={isOwner ? { left: -20 } : { right: -20 }}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setOpenDeleteId(
+                                      openDeleteId === m.id ? null : m.id
+                                    );
+                                  }}
+                                >
+                                  ⋯
+                                </button>
+                              </Popover>
+                            )}
                           </div>
                         );
                       })
@@ -474,14 +529,14 @@ export default function Chat() {
                 )}
               </div>
 
-              <div className="grid grid-cols-[1fr_20fr_1fr_1fr] place-content-center gap-3 mt-4 relative shrink-0">
+              <div className="grid grid-cols-[0.9fr_12fr_0.9fr_0.9fr] sm:grid-cols-[1fr_16fr_1fr_1fr] md:grid-cols-[1fr_20fr_1fr_1fr] place-content-center gap-2 sm:gap-3 mt-4 relative shrink-0">
                 {showEmojiPicker && (
-                  <div className="absolute bottom-12 right-0 z-50 shadow-lg">
+                  <div className="absolute bottom-12 right-0 z-50 shadow-lg w-[280px] max-w-[90vw]">
                     <EmojiPicker
                       onEmojiClick={handleEmojiClick}
                       theme="dark"
-                      width={400}
-                      height={400}
+                      width={280}
+                      height={320}
                     />
                   </div>
                 )}

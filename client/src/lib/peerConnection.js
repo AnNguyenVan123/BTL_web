@@ -70,6 +70,20 @@ export const createOffer = async (
 };
 
 export const initializeListeners = async (userId, roomId) => {
+  // reset candidate queue for this room
+  Object.keys(candidateQueue).forEach((key) => {
+    delete candidateQueue[key];
+  });
+  // close stale peer connections to avoid reuse across calls
+  Object.keys(participantConnections).forEach((uid) => {
+    try {
+      participantConnections[uid].close();
+    } catch (e) {
+      console.warn("⚠️ Error closing stale PC", e);
+    }
+    delete participantConnections[uid];
+  });
+
   // Set up WebSocket listeners for WebRTC signaling
 
   // Listen for WebRTC offers
@@ -82,17 +96,37 @@ export const initializeListeners = async (userId, roomId) => {
 
     if (pc) {
       try {
-        const isReadyToReceive =
+        // Only handle if we're free or already have remote offer
+        const isReady =
           pc.signalingState === "stable" ||
           pc.signalingState === "have-remote-offer";
+        if (!isReady) {
+          console.warn(
+            "⚠️ Bỏ qua Offer vì state không phù hợp:",
+            pc.signalingState
+          );
+          return;
+        }
 
-        if (isReadyToReceive) {
-          await pc.setRemoteDescription(new RTCSessionDescription(offer));
-          await processCandidateQueue(fromUserId, pc);
+        // Avoid setting the same offer again
+        if (
+          pc.remoteDescription &&
+          pc.remoteDescription.sdp === offer.sdp &&
+          pc.remoteDescription.type === offer.type
+        ) {
+          console.warn("⚠️ Bỏ qua Offer trùng lặp");
+          return;
+        }
+
+        await pc.setRemoteDescription(new RTCSessionDescription(offer));
+        await processCandidateQueue(fromUserId, pc);
+
+        // createAnswer only khi đã ở have-remote-offer
+        if (pc.signalingState === "have-remote-offer") {
           await createAnswer(fromUserId, userId, roomId);
         } else {
           console.warn(
-            "⚠️ Bỏ qua Offer vì đang bận xử lý tiến trình khác (Glare):",
+            "⚠️ Không tạo answer vì state sau setRemoteDescription không phải have-remote-offer:",
             pc.signalingState
           );
         }
@@ -112,10 +146,26 @@ export const initializeListeners = async (userId, roomId) => {
 
     if (pc) {
       try {
-        if (!pc.currentRemoteDescription) {
-          await pc.setRemoteDescription(new RTCSessionDescription(answer));
-          await processCandidateQueue(fromUserId, pc);
+        // Avoid double-setting answer
+        if (pc.currentRemoteDescription) {
+          console.warn("⚠️ Bỏ qua answer vì đã có remoteDescription");
+          return;
         }
+
+        // Should only apply when we have local offer
+        if (
+          pc.signalingState !== "have-local-offer" &&
+          pc.signalingState !== "have-local-pranswer"
+        ) {
+          console.warn(
+            "⚠️ Bỏ qua answer vì state không phù hợp:",
+            pc.signalingState
+          );
+          return;
+        }
+
+        await pc.setRemoteDescription(new RTCSessionDescription(answer));
+        await processCandidateQueue(fromUserId, pc);
       } catch (e) {
         console.error(e);
       }
@@ -186,7 +236,12 @@ const createAnswer = async (otherUserId, userId, roomId) => {
 export const addConnection = (newUser, currentUser, stream, roomId) => {
   const newUserId = Object.keys(newUser)[0];
   if (participantConnections[newUserId]) {
-    return newUser;
+    try {
+      participantConnections[newUserId].close();
+    } catch (e) {
+      console.warn("⚠️ Error closing existing PC", e);
+    }
+    delete participantConnections[newUserId];
   }
   const peerConnection = new RTCPeerConnection(servers);
   participantConnections[newUserId] = peerConnection;

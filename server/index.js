@@ -7,7 +7,8 @@ const path = require("path");
 const crypto = require("crypto");
 
 try {
-  const serviceAccount = require("./firebase-admin.json");
+  const serviceAccount =
+    process.env.GOOGLE_APPLICATION_CREDENTIALS || "./firebase-admin.json";
   admin.initializeApp({
     credential: admin.credential.cert(serviceAccount),
   });
@@ -127,6 +128,42 @@ io.on("connection", (socket) => {
     io.to(`user:${targetUserId}`).emit("call-cancelled", {
       callerId: userId,
       roomId,
+    });
+  });
+
+  // Handle callee decline
+  socket.on("call-decline", (data) => {
+    const { targetUserId, roomId, chatId } = data || {};
+    if (!targetUserId) {
+      console.warn("⚠️ [SERVER] call-decline missing targetUserId");
+      return;
+    }
+    console.log(
+      `📞 [SERVER] Call declined by ${userId}, notifying ${targetUserId} (room ${roomId})`
+    );
+    io.to(`user:${targetUserId}`).emit("call-declined", {
+      callerId: userId,
+      roomId,
+      chatId,
+    });
+  });
+
+  // Handle call ended (while both in room)
+  socket.on("call-ended", (data = {}) => {
+    const { targetUserId, roomId, chatId, reason, durationSec } = data;
+    if (!targetUserId) {
+      console.warn("⚠️ [SERVER] call-ended missing targetUserId");
+      return;
+    }
+    console.log(
+      `📞 [SERVER] Call ended by ${userId}, notifying ${targetUserId} (room ${roomId})`
+    );
+    io.to(`user:${targetUserId}`).emit("call-ended", {
+      callerId: userId,
+      roomId,
+      chatId,
+      reason,
+      durationSec,
     });
   });
 
@@ -485,6 +522,43 @@ io.on("connection", (socket) => {
     }
   });
 
+  // Delete message
+  socket.on("delete-message", async (data) => {
+    try {
+      const { chatId, messageId } = data || {};
+      if (!chatId || !messageId) {
+        socket.emit("error", { message: "Missing chatId or messageId" });
+        return;
+      }
+
+      const chatDoc = await db.collection("chats").doc(chatId).get();
+      if (!chatDoc.exists) {
+        socket.emit("error", { message: "Chat not found" });
+        return;
+      }
+
+      const chatData = chatDoc.data();
+      const messages = chatData.messages || [];
+      const messageIndex = messages.findIndex((m) => m.id === messageId);
+
+      if (messageIndex === -1) {
+        socket.emit("error", { message: "Message not found" });
+        return;
+      }
+
+      messages.splice(messageIndex, 1);
+      await db.collection("chats").doc(chatId).update({ messages });
+
+      io.to(`chat:${chatId}`).emit("message-deleted", {
+        chatId,
+        messageId,
+      });
+    } catch (error) {
+      console.error("Error deleting message:", error);
+      socket.emit("error", { message: "Failed to delete message" });
+    }
+  });
+
   // ========== WEBRTC SIGNALING EVENTS ==========
 
   // Join video call room
@@ -494,7 +568,9 @@ io.on("connection", (socket) => {
     const roomId = isStringPayload ? payload : payload?.roomId;
     const profile =
       (!isStringPayload && payload?.profile) ||
-      (legacyProfile && typeof legacyProfile === "object" ? legacyProfile : {}) ||
+      (legacyProfile && typeof legacyProfile === "object"
+        ? legacyProfile
+        : {}) ||
       {};
     if (!roomId) {
       console.warn("⚠️ [SERVER] join-video-room missing roomId");
@@ -506,14 +582,12 @@ io.on("connection", (socket) => {
       if (!activeRooms.has(roomId)) {
         activeRooms.set(roomId, new Map());
       }
-      activeRooms
-        .get(roomId)
-        .set(socket.id, {
-          userId,
-          socketId: socket.id,
-          displayName: profile.displayName,
-          photoURL: profile.photoURL,
-        });
+      activeRooms.get(roomId).set(socket.id, {
+        userId,
+        socketId: socket.id,
+        displayName: profile.displayName,
+        photoURL: profile.photoURL,
+      });
 
       // Notify others in the room
       socket.to(`video-room:${roomId}`).emit("user-joined", {
