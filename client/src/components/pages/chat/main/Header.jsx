@@ -12,7 +12,7 @@ import { v4 as uuidv4 } from "uuid";
 import { useAuth } from "../../../../context/AuthContext";
 import { db } from "../../../../lib/firebase";
 
-export default function Header({ setClose, receiver }) {
+export default function Header({ setClose, isInterrupted, receiver }) {
   const navigate = useNavigate();
   const { user } = useAuth();
 
@@ -24,6 +24,10 @@ export default function Header({ setClose, receiver }) {
     callType = "video",
     chatId = null
   ) => {
+    if (isInterrupted) {
+      alert("Không thể thực hiện cuộc gọi.");
+      return;
+    }
     const newRoomId = uuidv4();
     const isGroup = receiver?.isGroup || false;
 

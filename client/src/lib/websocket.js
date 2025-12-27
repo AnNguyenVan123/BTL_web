@@ -109,13 +109,19 @@ class WebSocketService {
     this.socket.emit("leave-chat", chatId);
   }
 
-  sendMessage(chatId, text, type = "text", img = null) {
+  sendMessage(chatId, text, type = "text", img = null, receiverId) {
     if (!this.socket?.connected) {
       console.warn("⚠️ Socket not connected, cannot send message");
       return;
     }
-    console.log("📤 Emitting send-message:", { chatId, text, type, img });
-    this.socket.emit("send-message", { chatId, text, type, img });
+    console.log("📤 Emitting send-message:", {
+      chatId,
+      text,
+      type,
+      img,
+      receiverId,
+    });
+    this.socket.emit("send-message", { chatId, text, type, img, receiverId });
   }
 
   viewSnap(chatId, messageId) {

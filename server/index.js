@@ -39,6 +39,7 @@ io.use(async (socket, next) => {
     const decodedToken = await admin.auth().verifyIdToken(token);
     socket.userId = decodedToken.uid;
     socket.user = decodedToken;
+
     next();
   } catch (error) {
     console.error("Socket authentication error:", error);
@@ -427,7 +428,7 @@ io.on("connection", (socket) => {
   socket.on("send-message", (data) => {
     console.log(`Received send-message from ${userId}:`, data);
     try {
-      const { chatId, text, type = "text", img } = data;
+      const { chatId, text, type = "text", img, receiverId } = data;
 
       if (!chatId || !text) {
         console.error("Missing chatId or text in send-message");
@@ -453,6 +454,31 @@ io.on("connection", (socket) => {
       });
 
       (async () => {
+        //Check block user
+        if (receiverId) {
+          try {
+            const [senderDoc, receiverDoc] = await Promise.all([
+              db.collection("users").doc(userId).get(),
+              db.collection("users").doc(receiverId).get(),
+            ]);
+
+            const senderData = senderDoc.data();
+            const receiverData = receiverDoc.data();
+
+            if (senderData?.blockedUsers?.includes(receiverId)) {
+              socket.emit("error", { message: "Bạn đã chặn người dùng này." });
+              return;
+            }
+
+            if (receiverData?.blockedUsers?.includes(senderId)) {
+              socket.emit("error", { message: "Không thể gửi tin nhắn." });
+              return;
+            }
+          } catch (err) {
+            console.error("Check block error:", err);
+          }
+        }
+
         try {
           // Verify access
           const chatDoc = await db.collection("chats").doc(chatId).get();
