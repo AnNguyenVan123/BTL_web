@@ -2,27 +2,12 @@ const express = require("express");
 const http = require("http");
 const { Server } = require("socket.io");
 const cors = require("cors");
-const admin = require("firebase-admin");
 const path = require("path");
 const crypto = require("crypto");
+const { db, admin, FieldValue } = require("./functions/src/config/firebase");
 const {
   updateLastMessageBackground,
 } = require("./functions/src/helpers/updateLastMessage");
-require("dotenv").config();
-try {
-  const serviceAccount =
-    process.env.GOOGLE_APPLICATION_CREDENTIALS || "./firebase-admin.json";
-  admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount),
-  });
-  console.log("Firebase Admin initialized");
-} catch (error) {
-  console.error("Error initializing Firebase Admin:", error.message);
-  process.exit(1);
-}
-
-const db = admin.firestore();
-const FieldValue = admin.firestore.FieldValue;
 
 const app = express();
 const server = http.createServer(app);
