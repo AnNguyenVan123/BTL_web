@@ -24,8 +24,7 @@ export default function Chat() {
   const { close, setClose, selectedChatId, receiver, setReceiver } =
     useContext(ChatContext);
   const [messages, setMessages] = useState([]);
-  
-  // Các state UI không thuộc về Input thì giữ lại ở đây
+
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [viewingSnap, setViewingSnap] = useState(null);
   const [chatMetadata, setChatMetadata] = useState(null);
@@ -71,24 +70,14 @@ export default function Chat() {
     websocketService.viewSnap(selectedChatId, messageToBurn.id);
   };
 
-  // --- LOGIC GỬI TIN NHẮN ---
-
-  // 1. Gửi Text (Được gọi từ ChatInput)
   const handleSendMessage = (text) => {
     websocketService.sendMessage(selectedChatId, text);
   };
 
-  // Helper function để gửi Snap qua WebSocket khi đã có URL
   const sendSnapMessage = (url) => {
-    websocketService.sendMessage(
-      selectedChatId,
-      "Sent a Snap",
-      "snap",
-      url
-    );
+    websocketService.sendMessage(selectedChatId, "Sent a Snap", "snap", url);
   };
 
-  // 2. Gửi Ảnh từ Camera (Base64)
   const handleSendImageFromCamera = async (imageBase64) => {
     try {
       console.log("Đang upload ảnh từ Camera...");
@@ -105,13 +94,16 @@ export default function Chat() {
     }
   };
 
-  // 3. Gửi Ảnh từ File (URL nhận được từ ChatInput)
-  const handleSendImageFromFile = (downloadURL) => {
-    // ChatInput đã lo việc upload, ở đây chỉ việc gửi tin nhắn
-    sendSnapMessage(downloadURL);
+  const handleSendFile = (downloadURL) => {
+    if (!selectedChatId || !downloadURL) return;
+    websocketService.sendMessage(
+      selectedChatId,
+      downloadURL,
+      "file",
+      downloadURL
+    );
   };
 
-  // 4. Xử lý Typing (Được gọi từ ChatInput)
   const handleTyping = () => {
     if (websocketService.isConnected) {
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
@@ -124,7 +116,6 @@ export default function Chat() {
     }
   };
 
-  // 5. Xử lý Focus Input (Đánh dấu đã xem)
   const handleInputFocus = async () => {
     if (selectedChatId) {
       if (window.__markChatAsSeenOptimistic) {
@@ -138,9 +129,6 @@ export default function Chat() {
     }
   };
 
-  // --- END LOGIC GỬI TIN NHẮN ---
-
-  // ... (Phần useEffect lấy data, websocket giữ nguyên như cũ, không thay đổi)
   useEffect(() => {
     if (!selectedChatId) return;
 
@@ -245,7 +233,6 @@ export default function Chat() {
     }
   }, [messages.length]);
 
-  // UseEffect fetch members (giữ nguyên)
   useEffect(() => {
     if (!chatMetadata || !selectedChatId) return;
     const fetchMembers = async () => {
@@ -260,33 +247,41 @@ export default function Chat() {
         });
         await Promise.all(promises);
       } else {
-         // Logic fetch 1-1 giữ nguyên
-         try {
-            const currentUserDoc = await getDoc(doc(db, "users", user.uid));
-            if (currentUserDoc.exists()) details[user.uid] = currentUserDoc.data();
-            
-            const userChatsRef = doc(db, "userchats", user.uid);
-            const userChatsDoc = await getDoc(userChatsRef);
-            if (userChatsDoc.exists()) {
-               const chatEntry = userChatsDoc.data().chats?.find(c => c.chatId === selectedChatId);
-               if (chatEntry?.receiverId) {
-                  const receiverDoc = await getDoc(doc(db, "users", chatEntry.receiverId));
-                  if (receiverDoc.exists()) details[chatEntry.receiverId] = receiverDoc.data();
-               }
+        // Logic fetch 1-1 giữ nguyên
+        try {
+          const currentUserDoc = await getDoc(doc(db, "users", user.uid));
+          if (currentUserDoc.exists())
+            details[user.uid] = currentUserDoc.data();
+
+          const userChatsRef = doc(db, "userchats", user.uid);
+          const userChatsDoc = await getDoc(userChatsRef);
+          if (userChatsDoc.exists()) {
+            const chatEntry = userChatsDoc
+              .data()
+              .chats?.find((c) => c.chatId === selectedChatId);
+            if (chatEntry?.receiverId) {
+              const receiverDoc = await getDoc(
+                doc(db, "users", chatEntry.receiverId)
+              );
+              if (receiverDoc.exists())
+                details[chatEntry.receiverId] = receiverDoc.data();
             }
-         } catch(e) { console.error(e) }
+          }
+        } catch (e) {
+          console.error(e);
+        }
       }
       setMemberDetails(details);
     };
     fetchMembers();
   }, [chatMetadata, selectedChatId, user.uid]);
 
-  // UseEffect fetch receiver info (giữ nguyên)
+  // UseEffect fetch receiver info
   useEffect(() => {
-     if (!selectedChatId || !chatMetadata || chatMetadata.type === "group") return;
-     if (!receiver?.uid) {
-        // Logic fetch receiver khi reload trang (giữ nguyên logic cũ)
-     }
+    if (!selectedChatId || !chatMetadata || chatMetadata.type === "group")
+      return;
+    if (!receiver?.uid) {
+    }
   }, [selectedChatId, chatMetadata, receiver, user.uid]);
 
   // UseEffect typing status
@@ -340,8 +335,7 @@ export default function Chat() {
                           m.viewedBy && m.viewedBy.includes(user.uid);
                         const isCallMessage =
                           m.type === "call" || m.type === "call_log";
-                        
-                        // --- PHẦN RENDER MESSAGE GIỮ NGUYÊN ---
+
                         return (
                           <div
                             key={m.id || i}
@@ -386,6 +380,23 @@ export default function Chat() {
                                     message={m}
                                     isOwner={isOwner}
                                   />
+                                ) : m.type === "file" ? (
+                                  <a
+                                    href={m.img || m.text}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    download
+                                    className="flex items-center gap-2 px-3 py-2 bg-gray-200 dark:bg-gray-700 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition"
+                                  >
+                                    <span className="text-sm font-semibold truncate max-w-[200px]">
+                                      {(m.img || m.text || "")
+                                        .split("/")
+                                        .pop() || "File"}
+                                    </span>
+                                    <span className="text-xs text-blue-600 underline">
+                                      Download
+                                    </span>
+                                  </a>
                                 ) : m.type === "snap" ? (
                                   <div className="flex flex-col gap-1">
                                     {isViewedByMe ? (
@@ -484,7 +495,10 @@ export default function Chat() {
                     )}
                     {Array.from(typingUsers).map((userId) => {
                       // Logic hiển thị Typing indicator (giữ nguyên)
-                      const userInfo = memberDetails[userId] || { photoURL: "/default-avatar.png", displayName: "Someone" };
+                      const userInfo = memberDetails[userId] || {
+                        photoURL: "/default-avatar.png",
+                        displayName: "Someone",
+                      };
                       return (
                         <TypingIndicator
                           key={userId}
@@ -498,15 +512,13 @@ export default function Chat() {
                 )}
               </div>
 
-              {/* Thay thế phần UI Input cũ bằng Component mới */}
               <ChatInput
                 onSendMessage={handleSendMessage}
-                onSendImageSuccess={handleSendImageFromFile}
+                onSendImageSuccess={handleSendFile}
                 onTyping={handleTyping}
                 onFocus={handleInputFocus}
                 openCamera={() => setIsCameraOpen(true)}
               />
-
             </div>
           </div>
         </div>
@@ -517,7 +529,7 @@ export default function Chat() {
       <CameraModal
         isOpen={isCameraOpen}
         onClose={() => setIsCameraOpen(false)}
-        onSendImage={handleSendImageFromCamera} // Hàm này nhận Base64
+        onSendImage={handleSendImageFromCamera}
       />
     </>
   );
