@@ -12,7 +12,7 @@ import { v4 as uuidv4 } from "uuid";
 
 export default function ChatInput({
   onSendMessage,
-  onSendImageSuccess, // Callback khi đã có URL ảnh (từ file upload)
+  onSendImageSuccess,
   onTyping,
   onFocus,
   openCamera,
@@ -21,7 +21,6 @@ export default function ChatInput({
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const fileInputRef = useRef(null);
 
-  // Xử lý gửi tin nhắn text
   const handleSend = () => {
     if (!text || !text.trim()) return;
     onSendMessage(text);
@@ -29,41 +28,33 @@ export default function ChatInput({
     setShowEmojiPicker(false);
   };
 
-  // Xử lý khi gõ phím
   const handleInputChange = (e) => {
     setText(e.target.value);
     if (onTyping) onTyping();
   };
 
-  // Xử lý chọn Emoji
   const handleEmojiClick = (emojiData) => {
     setText((prev) => prev + emojiData.emoji);
   };
 
-  // Xử lý Upload File từ máy
   const handleFileSelect = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
     try {
       console.log("Đang upload file từ máy...");
-      // Tạo tên file ngẫu nhiên
       const imageId = uuidv4();
       const storageRef = ref(storage, `snaps/${imageId}`);
 
-      // Upload file raw (tốt hơn base64 cho file lớn)
       await uploadBytes(storageRef, file);
 
-      // Lấy URL
       const downloadURL = await getDownloadURL(storageRef);
 
       console.log("Upload xong, gửi URL cho parent...");
-      // Gửi URL ngược về Chat.js để bắn WebSocket
       onSendImageSuccess(downloadURL);
     } catch (error) {
       console.error("Lỗi upload file:", error);
     } finally {
-      // Reset input để người dùng có thể chọn lại file đó nếu muốn
       if (fileInputRef.current) {
         fileInputRef.current.value = null;
       }
@@ -83,7 +74,6 @@ export default function ChatInput({
         </div>
       )}
 
-      {/* Nút mở Camera */}
       <div
         className="w-9 h-9 border border-gray-700 rounded-full grid place-content-center bg-[#292929] cursor-pointer hover:bg-[#3a3a3a] transition-colors"
         onClick={openCamera}
@@ -91,7 +81,6 @@ export default function ChatInput({
         <CameraFilled style={{ color: "#7E7E7E", fontSize: 18 }} />
       </div>
 
-      {/* Input nhập tin nhắn */}
       <div id="custom-input">
         <Input
           className="input"
@@ -103,7 +92,6 @@ export default function ChatInput({
         />
       </div>
 
-      {/* Nút mở Emoji */}
       <div
         className="w-9 h-9 border border-gray-700 rounded-full grid place-content-center bg-[#292929] cursor-pointer hover:bg-[#3a3a3a] transition-colors"
         onClick={() => setShowEmojiPicker((prev) => !prev)}
@@ -111,7 +99,6 @@ export default function ChatInput({
         <SmileOutlined style={{ color: "#7E7E7E", fontSize: 18 }} />
       </div>
 
-      {/* Nút Upload Ảnh từ File */}
       <div
         className="w-9 h-9 border border-gray-700 rounded-full grid place-content-center bg-[#292929] cursor-pointer hover:bg-[#3a3a3a] transition-colors"
         onClick={() => fileInputRef.current?.click()}
