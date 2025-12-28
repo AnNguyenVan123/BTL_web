@@ -250,6 +250,28 @@ class WebSocketService {
     };
   }
 
+  // ========== React ===============
+  sendReactionUpdate(chatId, messageId, updatedReactions) {
+    if (this.socket) {
+      this.socket.emit("send-reaction-update", {
+        chatId,
+        messageId,
+        updatedReactions,
+      });
+    }
+  }
+
+  onReactionUpdated(callback) {
+    if (this.socket) {
+      this.socket.on("receive-reaction-update", callback);
+    }
+    return () => {
+      if (this.socket) {
+        this.socket.off("receive-reaction-update", callback);
+      }
+    };
+  }
+
   // ========== WEBRTC METHODS ==========
 
   joinVideoRoom(roomId, profile = {}) {

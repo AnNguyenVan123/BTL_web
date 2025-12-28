@@ -18,8 +18,18 @@ import CameraUI from "../components/pages/chat/main/CameraUI";
 import TypingIndicator from "../components/pages/chat/main/TypingIndicator";
 import CallMessage from "../components/pages/chat/main/CallMessage";
 import ChatInput from "../components/pages/chat/ChatInput";
+import MessageBubble from "../components/pages/chat/main/MessageBubble";
 import { friendService } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
+
+const formatMessageTime = (timestamp) => {
+  if (!timestamp?.toDate) return "";
+  return timestamp.toDate().toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+  });
+};
 
 export default function Chat() {
   const { close, setClose, selectedChatId, receiver, setReceiver } =
@@ -213,6 +223,20 @@ export default function Chat() {
       console.error("WebSocket error:", error);
     });
 
+    const unsubscribeReaction = websocketService.onReactionUpdated((data) => {
+      console.log(data);
+      if (data.chatId === selectedChatId) {
+        setMessages((prevMessages) => {
+          return prevMessages.map((msg) => {
+            if (msg.id === data.messageId) {
+              return { ...msg, reactions: data.updatedReactions };
+            }
+            return msg;
+          });
+        });
+      }
+    });
+
     const setupWebSocket = async () => {
       try {
         if (!websocketService.isConnected) {
@@ -232,6 +256,7 @@ export default function Chat() {
       if (unsubscribeMessageDeleted) unsubscribeMessageDeleted();
       unsubscribeSnapViewed();
       unsubscribeError();
+      unsubscribeReaction();
       if (currentChatId) {
         websocketService.leaveChat(currentChatId);
       }
@@ -361,11 +386,11 @@ export default function Chat() {
                         return (
                           <div
                             key={m.id || i}
-                            className={`flex gap-2 max-w-full sm:max-w-[80%] ${
+                            className={`flex gap-2 max-w-full sm:max-w-[80%] items-center ${
                               isOwner
                                 ? "self-end flex-row-reverse"
                                 : "self-start"
-                            } relative`}
+                            } relative group`}
                           >
                             <Avatar
                               src={
@@ -461,15 +486,20 @@ export default function Chat() {
                                     )}
                                   </div>
                                 ) : (
-                                  <div className="text-sm">{m.text}</div>
+                                  <MessageBubble
+                                    chatId={selectedChatId}
+                                    message={m}
+                                    currentUserId={user?.uid}
+                                    isOwner={isOwner}
+                                  />
                                 )}
                               </div>
                               <div className="text-xs text-gray-300 mt-1">
-                                {m.createdAt?.toDate?.().toLocaleString?.() ||
-                                  ""}
+                                {formatMessageTime(m.createdAt) || ""}
                               </div>
                             </div>
 
+                            {/* NÚT XÓA */}
                             {isOwner && m.id && (
                               <Popover
                                 content={
@@ -493,13 +523,17 @@ export default function Chat() {
                                 onOpenChange={(open) =>
                                   setOpenDeleteId(open ? m.id : null)
                                 }
-                                placement={isOwner ? "left" : "right"}
+                                placement="top"
                               >
                                 <button
-                                  className="absolute -top-2 text-gray-400 hover:text-white text-xs"
-                                  style={
-                                    isOwner ? { left: -20 } : { right: -20 }
-                                  }
+                                  className={`
+                                    text-gray-400 hover:text-white text-xs p-2 
+                                    transition-opacity opacity-0 group-hover:opacity-100 
+                                    ${
+                                      openDeleteId === m.id ? "opacity-100" : ""
+                                    }
+                                    mr-6
+                                  `}
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     setOpenDeleteId(

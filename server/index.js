@@ -609,6 +609,17 @@ io.on("connection", async (socket) => {
     }
   });
 
+  socket.on("send-reaction-update", (data) => {
+    const { chatId, messageId, updatedReactions } = data;
+    const roomName = `chat:${chatId}`;
+
+    io.to(roomName).emit("receive-reaction-update", {
+      chatId,
+      messageId,
+      updatedReactions,
+    });
+  });
+
   // Mark snap as viewed
   socket.on("view-snap", async (data) => {
     try {
