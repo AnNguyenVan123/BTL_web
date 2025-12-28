@@ -572,9 +572,9 @@ export default function StoryCreator({ onClose, currentUser }) {
   }, [isRecording]);
 
   return (
-    <div className="fixed inset-0 z-[60] bg-black font-sans text-white overflow-hidden flex items-center justify-center">
+    <div className="fixed inset-0 z-60 bg-black font-sans text-white overflow-hidden flex items-center justify-center">
       <div className="absolute inset-0 bg-gray-900">
-        <div className="absolute inset-0 bg-gradient-to-br from-purple-900/20 to-blue-900/20" />
+        <div className="absolute inset-0 bg-linear-to-br from-purple-900/20 to-blue-900/20" />
       </div>
 
       <div className="relative w-full h-full md:w-[450px] md:h-[90vh] md:rounded-3xl overflow-hidden bg-black shadow-2xl ring-4 ring-gray-800">
@@ -599,7 +599,7 @@ export default function StoryCreator({ onClose, currentUser }) {
           }`}
         />
 
-        <div className="absolute top-0 left-0 right-0 p-5 flex justify-between items-start z-20 bg-gradient-to-b from-black/60 to-transparent pb-12">
+        <div className="absolute top-0 left-0 right-0 p-5 flex justify-between items-start z-20 bg-linear-to-b from-black/60 to-transparent pb-12">
           <button
             onClick={onClose}
             className="p-2.5 bg-white/10 backdrop-blur-md rounded-full hover:bg-white/20"
@@ -623,7 +623,7 @@ export default function StoryCreator({ onClose, currentUser }) {
           </div>
         )}
 
-        <div className="absolute bottom-0 w-full z-20 pb-8 pt-12 bg-gradient-to-t from-black/90 via-black/50 to-transparent flex flex-col items-center">
+        <div className="absolute bottom-0 w-full z-20 pb-8 pt-12 bg-linear-to-t from-black/90 via-black/50 to-transparent flex flex-col items-center">
           <div className="w-full overflow-x-auto scrollbar-hide mb-6 px-4 snap-x">
             <div className="flex gap-4 items-center justify-center min-w-max px-4">
               {FILTERS.map((f) => (
