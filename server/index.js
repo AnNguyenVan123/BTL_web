@@ -52,7 +52,7 @@ const activeRooms = new Map();
 const userSockets = new Map();
 
 // Socket.io connection handler
-io.on("connection", (socket) => {
+io.on("connection", async (socket) => {
   const userId = socket.userId;
   console.log(`User connected: ${userId} (socket: ${socket.id})`);
 
@@ -61,6 +61,18 @@ io.on("connection", (socket) => {
     userSockets.set(userId, new Set());
   }
   userSockets.get(userId).add(socket.id);
+
+  socket.broadcast.emit("user-status", {
+    userId,
+    isOnline: true,
+  });
+
+  db.collection("users")
+    .doc(userId)
+    .update({
+      isOnline: true,
+    })
+    .catch((e) => console.error("Error update online:", e));
 
   // Join user's personal room for notifications
   socket.join(`user:${userId}`);
@@ -864,7 +876,7 @@ io.on("connection", (socket) => {
   });
 
   // Disconnect handler
-  socket.on("disconnect", () => {
+  socket.on("disconnect", async () => {
     console.log(`User disconnected: ${userId} (socket: ${socket.id})`);
     // Remove from user sockets
     if (userSockets.has(userId)) {
@@ -873,6 +885,22 @@ io.on("connection", (socket) => {
         userSockets.delete(userId);
       }
     }
+
+    const lastActive = Date.now();
+    socket.broadcast.emit("user-status", {
+      userId,
+      isOnline: false,
+      lastActive,
+    });
+
+    await db
+      .collection("users")
+      .doc(userId)
+      .update({
+        isOnline: false,
+        lastActive: lastActive,
+      })
+      .catch((e) => console.error("Error update offline:", e));
 
     // Remove from active rooms
     activeRooms.forEach((sockets, roomId) => {

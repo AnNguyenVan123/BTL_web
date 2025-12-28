@@ -1,4 +1,5 @@
 import { useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
 import {
   LeftOutlined,
   PhoneFilled,
@@ -11,12 +12,13 @@ import { v4 as uuidv4 } from "uuid";
 
 import { useAuth } from "../../../../context/AuthContext";
 import { db } from "../../../../lib/firebase";
+import { formatLastActive } from "../../../../lib/formatTime";
 
 export default function Header({ setClose, isInterrupted, receiver }) {
   const navigate = useNavigate();
   const { user } = useAuth();
-
-  // console.log(`============ Header: ${JSON.stringify(receiver)}`);
+  const [isOnline, setIsOnline] = useState(receiver?.isOnline || false);
+  const [lastActive, setLastActive] = useState(receiver?.lastActive || null);
 
   const callUser = async (
     currentUser,
@@ -97,6 +99,26 @@ export default function Header({ setClose, isInterrupted, receiver }) {
       alert(`Không thể kết nối: ${error.message}`);
     }
   };
+
+  useEffect(() => {
+    setIsOnline(receiver?.isOnline);
+    setLastActive(receiver?.lastActive);
+
+    const handleStatusUpdate = (data) => {
+      if (data.userId === receiver.uid) {
+        setIsOnline(data.isOnline);
+        if (data.lastActive) {
+          setLastActive(data.lastActive);
+        }
+      }
+    };
+
+    websocketService.socket.on("user-status", handleStatusUpdate);
+
+    return () => {
+      websocketService.socket.off("user-status", handleStatusUpdate);
+    };
+  }, [receiver.uid]);
   return (
     <div className="w-full flex justify-between p-3 gap-3 max-h-[61px] h-1/6">
       <div className="flex gap-3">
@@ -107,14 +129,27 @@ export default function Header({ setClose, isInterrupted, receiver }) {
           <LeftOutlined style={{ color: "white" }} />
         </button>
         <div className="flex gap-3 items-center">
-          <div className="w-9 h-9 rounded-full bg-amber-200 overflow-hidden">
+          <div className="relative">
             <img
-              src={receiver?.photoURL || "/default-avatar.png"}
-              alt="avatar"
-              className="object-cover"
+              src={receiver.photoURL || "/default-avatar.png"}
+              className="w-10 h-10 rounded-full object-cover bg-amber-200"
             />
+            {isOnline && (
+              <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-[#1E1E1E]"></div>
+            )}
           </div>
-          <p className="text-white font-semibold">{receiver?.displayName}</p>
+          <div className="flex flex-col">
+            <span className="font-bold text-white">{receiver.displayName}</span>
+            <span className="text-xs text-gray-400">
+              {isOnline ? (
+                <span className="text-green-400 font-medium">
+                  Đang hoạt động
+                </span>
+              ) : (
+                <span>{formatLastActive(lastActive)}</span>
+              )}
+            </span>
+          </div>
         </div>
       </div>
       <div className="bg-[#292929] flex gap-4 p-4 rounded-4xl text-white items-center">
