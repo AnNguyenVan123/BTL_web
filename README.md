@@ -251,7 +251,7 @@ FIREBASE_PROJECT_ID=your_project_id
 
 ## Tài liệu tham khảo
 
-- **Trello Board:** [Link](https://trello.com/invite/b/68f85a28d1d97a0564e1c588/ATTI00130db788e4aedc26b9e85e1f6b045eAE1B1AF0/snapchat)
+- **Trello Board:** [Link](https://husteduvn-my.sharepoint.com/:x:/g/personal/anh_lv225250_sis_hust_edu_vn/IQDBGzxgWNv2T7X21cFsax44AVa0RLTPq1m2jkVN6XTw9KY?e=KnpWcN)
 - **GitHub:** [Source Code](https://github.com/AnNguyenVan123/BTL_web)
 
 ## License
