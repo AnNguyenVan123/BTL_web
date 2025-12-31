@@ -135,6 +135,7 @@ module.exports.addMemberToGroup = async (req, res) => {
     }
 
     const userChatsRef = db.collection("userchats").doc(newMemberId);
+    const updatedMembers = [...chatData.members, newMemberId];
 
     await db.runTransaction(async (t) => {
       const userChatsDoc = await t.get(userChatsRef);
