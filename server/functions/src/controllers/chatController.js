@@ -116,6 +116,7 @@ module.exports.addMemberToGroup = async (req, res) => {
     const requesterId = req.user.uid;
     const io = req.app.get("socketio");
     const chatRef = db.collection("chats").doc(chatId);
+    const memberRef = db.collection("users").doc(newMemberId);
     const chatDoc = await chatRef.get();
 
     if (!chatDoc.exists) {
@@ -135,10 +136,13 @@ module.exports.addMemberToGroup = async (req, res) => {
     }
 
     const userChatsRef = db.collection("userchats").doc(newMemberId);
-    const updatedMembers = [...chatData.members, newMemberId];
 
     await db.runTransaction(async (t) => {
       const userChatsDoc = await t.get(userChatsRef);
+      const memberDoc = await t.get(memberRef);
+      const memberName = memberDoc.exists
+        ? memberDoc.data().displayName || "Thành viên"
+        : "Thành viên";
 
       t.update(chatRef, {
         members: admin.firestore.FieldValue.arrayUnion(newMemberId),
@@ -167,11 +171,11 @@ module.exports.addMemberToGroup = async (req, res) => {
         });
       }
 
-      const systemText = "đã thêm một thành viên mới vào nhóm.";
+      const systemText = `đã thêm ${memberName} vào nhóm.`;
       const systemMsgId = admin.firestore().collection("_").doc().id;
       const systemMessage = {
         id: systemMsgId,
-        text: "đã thêm một thành viên mới vào nhóm.",
+        text: systemText,
         senderId: requesterId,
         createdAt: new Date(),
         type: "system",
@@ -211,6 +215,7 @@ module.exports.removeMember = async (req, res) => {
     const requesterId = req.user.uid;
     const io = req.app.get("socketio");
     const chatRef = db.collection("chats").doc(chatId);
+    const memberRef = db.collection("users").doc(memberId);
     let remainingMembers = [];
 
     await db.runTransaction(async (t) => {
@@ -230,6 +235,11 @@ module.exports.removeMember = async (req, res) => {
       }
       const userChatsRef = db.collection("userchats").doc(memberId);
       const userChatsDoc = await t.get(userChatsRef);
+      const memberDoc = await t.get(memberRef);
+
+      const memberName = memberDoc.exists
+        ? memberDoc.data().displayName || "Thành viên"
+        : "Thành viên";
 
       t.update(chatRef, {
         members: admin.firestore.FieldValue.arrayRemove(memberId),
@@ -249,7 +259,7 @@ module.exports.removeMember = async (req, res) => {
       if (isSelf) {
         systemText = "đã rời khỏi nhóm.";
       } else {
-        systemText = "đã mời một thành viên ra khỏi nhóm.";
+        systemText = `đã mời ${memberName} ra khỏi nhóm.`;
       }
       remainingMembers = chatData.members.filter((uid) => uid !== memberId);
 
