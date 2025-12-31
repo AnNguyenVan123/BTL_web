@@ -1,6 +1,6 @@
 import { useNavigate } from "react-router-dom";
-import { useState, useEffect } from "react";
-import { Modal, Avatar, Tooltip, Button } from "antd";
+import { useState, useEffect, useContext } from "react";
+import { Modal, Avatar, Tooltip } from "antd";
 import {
   LeftOutlined,
   PhoneFilled,
@@ -20,18 +20,27 @@ import { db } from "../../../../lib/firebase";
 import { formatLastActive } from "../../../../lib/formatTime";
 import AddMemberModal from "./AddMemberModal";
 import RemoveMemberModal from "./RemoveMemberModal";
+import { ChatContext } from "../../../../context/ChatContext";
 
 export default function Header({ setClose, isInterrupted, receiver }) {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const [isOnline, setIsOnline] = useState(receiver?.isOnline || false);
-  const [lastActive, setLastActive] = useState(receiver?.lastActive || null);
   const [memberDetails, setMemberDetails] = useState({});
   const [memberIds, setMemberIds] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isAddMemberOpen, setIsAddMemberOpen] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const [targetToRemove, setTargetToRemove] = useState(null);
+  const { getUserStatus } = useContext(ChatContext);
+
+  const realtimeStatus = getUserStatus(receiver?.uid);
+
+  const isOnline = realtimeStatus
+    ? realtimeStatus.isOnline
+    : receiver?.isOnline || false;
+  const lastActive = realtimeStatus
+    ? realtimeStatus.lastActive
+    : receiver?.lastActive || null;
 
   const showMembersModal = () => {
     setIsModalOpen(receiver?.isGroup);
@@ -130,26 +139,6 @@ export default function Header({ setClose, isInterrupted, receiver }) {
     }
     setTargetToRemove(null);
   };
-
-  useEffect(() => {
-    setIsOnline(receiver?.isOnline);
-    setLastActive(receiver?.lastActive);
-
-    const handleStatusUpdate = (data) => {
-      if (data.userId === receiver.uid) {
-        setIsOnline(data.isOnline);
-        if (data.lastActive) {
-          setLastActive(data.lastActive);
-        }
-      }
-    };
-
-    websocketService.socket.on("user-status", handleStatusUpdate);
-
-    return () => {
-      websocketService.socket.off("user-status", handleStatusUpdate);
-    };
-  }, [receiver.uid]);
 
   const fetchMemberDetails = async (uids) => {
     try {

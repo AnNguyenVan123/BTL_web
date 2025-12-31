@@ -23,10 +23,15 @@ const formatTime = (timestamp) => {
 };
 
 export default function UserChat({ receiver, chat, isGroup }) {
-  const { setClose, setSelectedChatId, setReceiver, isMobile, setSidebarOpen } =
-    useContext(ChatContext);
+  const {
+    setClose,
+    setSelectedChatId,
+    setReceiver,
+    isMobile,
+    setSidebarOpen,
+    getUserStatus,
+  } = useContext(ChatContext);
   const { user } = useAuth();
-  const [isOnline, setIsOnline] = useState(receiver?.isOnline || false);
 
   const lastMessage = chat?.lastMessage || "No messages yet";
   const lastSenderId = chat?.lastSenderId;
@@ -34,28 +39,13 @@ export default function UserChat({ receiver, chat, isGroup }) {
 
   const isSeen = chat?.isSeen === false ? false : true;
   const hasUnreadMessage = !isLastMessageFromMe && !isSeen;
+  const realtimeStatus = getUserStatus(receiver?.uid);
+  const isOnline = realtimeStatus
+    ? realtimeStatus.isOnline
+    : receiver?.isOnline || false;
 
-  if (chat?.chatId && hasUnreadMessage) {
-    console.log(
-      `🔵 [Badge ${chat.chatId}] Unread: isSeen=${chat.isSeen}, isLastMessageFromMe=${isLastMessageFromMe}, hasUnreadMessage=${hasUnreadMessage}`
-    );
-  }
   const timestamp = chat?.updatedAt || chat?.updateAt;
   const formattedTime = formatTime(timestamp);
-
-  useEffect(() => {
-    if (isGroup || !receiver?.uid) return;
-    setIsOnline(receiver?.isOnline || false);
-    const handleStatusUpdate = (data) => {
-      if (data.userId === receiver.uid) {
-        setIsOnline(data.isOnline);
-      }
-    };
-    websocketService.socket.on("user-status", handleStatusUpdate);
-    return () => {
-      websocketService.socket.off("user-status", handleStatusUpdate);
-    };
-  }, [receiver, isGroup]);
 
   return (
     <div

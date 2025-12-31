@@ -5,11 +5,15 @@ import { Outlet } from "react-router-dom";
 import { CloseOutlined, MenuOutlined } from "@ant-design/icons";
 
 import { ChatContext } from "../context/ChatContext";
+import { websocketService } from "../lib/websocket";
+import { useAuth } from "../context/AuthContext";
 
 import SideBar from "../components/pages/chat/sidebar/SideBar";
 import NewChatPanel from "../components/pages/chat/sidebar/NewChatPanel";
 
 export default function ChatLayout() {
+  const { user } = useAuth();
+  const [userStatuses, setUserStatuses] = useState({});
   const [close, setClose] = useState(true);
   const [toggleAddUser, setToggleAddUser] = useState(false);
   const [selectedChatId, setSelectedChatId] = useState(null);
@@ -24,7 +28,6 @@ export default function ChatLayout() {
       const mobileView = window.innerWidth < 768;
       setIsMobile(mobileView);
 
-      // Only toggle sidebar when crossing the breakpoint to avoid closing it while open
       if (
         lastIsMobile.current === null ||
         lastIsMobile.current !== mobileView
@@ -38,6 +41,42 @@ export default function ChatLayout() {
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
+
+  // Tìm đến đoạn useEffect xử lý user-status và thay thế bằng đoạn này:
+
+  useEffect(() => {
+    if (!user) return;
+
+    const handleStatusUpdate = (data) => {
+      setUserStatuses((prev) => ({
+        ...prev,
+        [data.userId]: {
+          isOnline: data.isOnline,
+          lastActive: data.lastActive,
+        },
+      }));
+    };
+
+    const setupSocket = async () => {
+      if (!websocketService.isConnected) {
+        await websocketService.connect();
+      }
+
+      if (websocketService.socket) {
+        websocketService.socket.on("user-status", handleStatusUpdate);
+      }
+    };
+
+    setupSocket();
+
+    return () => {
+      websocketService.socket?.off("user-status", handleStatusUpdate);
+    };
+  }, [user]);
+
+  const getUserStatus = (uid) => {
+    return userStatuses[uid] || null;
+  };
 
   return (
     <ChatContext.Provider
@@ -55,6 +94,7 @@ export default function ChatLayout() {
         sidebarOpen,
         setSidebarOpen,
         isMobile,
+        getUserStatus,
       }}
     >
       <div className="chat-layout relative h-screen grid grid-cols-1 md:grid-cols-[280px_1fr] lg:grid-cols-[340px_1fr] overflow-hidden bg-transparent">
