@@ -5,9 +5,12 @@ import UserChat from "./User";
 import { useAuth } from "../../../../context/AuthContext";
 import { websocketService } from "../../../../lib/websocket";
 
+import ArchivedChats from "./ArchivedChats";
+
 export default function ChatList() {
   const { user } = useAuth();
   const [chats, setChats] = useState([]);
+  const [showArchivedList, setShowArchivedList] = useState(false);
   const userCacheRef = useRef(new Map());
   const optimisticUpdatesRef = useRef(new Map());
   const fetchingRef = useRef(new Set());
@@ -320,17 +323,78 @@ export default function ChatList() {
     return () => unsubscribe();
   }, []);
 
+  useEffect(() => {
+    const unsubArchive = websocketService.onChatArchived(({ chatId }) => {
+      setChats((prev) =>
+        prev.map((c) => (c.chatId === chatId ? { ...c, isArchived: true } : c))
+      );
+    });
+    return () => {
+      unsubArchive();
+    };
+  }, []);
+
+  useEffect(() => {
+    const unsubUnarchived = websocketService.onChatUnarchived(({ chatId }) => {
+      setChats((prev) =>
+        prev.map((c) => (c.chatId === chatId ? { ...c, isArchived: false } : c))
+      );
+    });
+    return () => {
+      unsubUnarchived();
+    };
+  }, []);
+
+  if (showArchivedList) {
+    return (
+      <ArchivedChats
+        allChats={chats}
+        onBack={() => setShowArchivedList(false)}
+      />
+    );
+  }
+
+  const visibleChats = chats.filter((chat) => !chat.isArchived);
+  const archivedCount = chats.filter((chat) => chat.isArchived).length;
   return (
     <>
+      {archivedCount > 0 && (
+        <div className="px-2 py-1 mb-2">
+          <button
+            onClick={() => setShowArchivedList(true)}
+            className="w-full text-left px-4 py-3 bg-[#1e1e1e] hover:bg-[#252525] rounded-lg flex items-center gap-3 transition-colors group"
+          >
+            <div className="w-10 h-10 rounded-full bg-gray-800 flex items-center justify-center group-hover:bg-gray-700">
+              <span className="text-lg">📂</span>
+            </div>
+            <div className="flex flex-col">
+              <span className="text-white font-semibold text-sm">
+                Kho lưu trữ
+              </span>
+              <span className="text-gray-500 text-xs">
+                {archivedCount} hội thoại
+              </span>
+            </div>
+          </button>
+        </div>
+      )}
+
       <div className="flex flex-col gap-3">
-        {chats?.map((chat) => (
-          <UserChat
-            key={chat.chatId}
-            receiver={chat?.receiver}
-            chat={chat}
-            isGroup={chat.isGroup}
-          />
-        ))}
+        {visibleChats.length === 0 && archivedCount === 0 ? (
+          <div className="text-center text-gray-500 mt-10 text-sm">
+            Chưa có tin nhắn nào
+          </div>
+        ) : (
+          visibleChats.map((chat) => (
+            <UserChat
+              key={chat.chatId}
+              receiver={chat?.receiver}
+              chat={chat}
+              isGroup={chat.isGroup}
+              isArchived={false}
+            />
+          ))
+        )}
       </div>
     </>
   );

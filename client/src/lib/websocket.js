@@ -271,6 +271,35 @@ class WebSocketService {
     return () => this.socket.off("error", callback);
   }
 
+  // ========= Archived Message ==========
+  archiveChat(chatId) {
+    this._waitForConnection(() => {
+      this.socket.emit("archive-chat", { chatId });
+    });
+  }
+
+  unarchiveChat(chatId) {
+    this._waitForConnection(() => {
+      this.socket.emit("unarchive-chat", { chatId });
+    });
+  }
+
+  onChatArchived(callback) {
+    const handler = (data) => callback(data);
+    this._waitForConnection(() => {
+      this.socket.on("chat-archived-success", handler);
+    });
+    return () => this.socket?.off("chat-archived-success", handler);
+  }
+
+  onChatUnarchived(callback) {
+    const handler = (data) => callback(data);
+    this._waitForConnection(() => {
+      this.socket.on("chat-unarchived-success", handler);
+    });
+    return () => this.socket?.off("chat-unarchived-success", handler);
+  }
+
   // ========== Typing ================
   sendTyping(chatId) {
     if (this.socket) {

@@ -511,4 +511,59 @@ module.exports = (io, socket) => {
       socket.emit("error", { message: "Failed to delete message" });
     }
   });
+
+  // archive message
+  socket.on("archive-chat", async (data) => {
+    try {
+      const userId = socket.userId;
+      const { chatId } = data;
+
+      const userChatsRef = db.collection("userchats").doc(userId);
+      const userChatsDoc = await userChatsRef.get();
+
+      if (userChatsDoc.exists) {
+        const userChatsData = userChatsDoc.data();
+        const chats = userChatsData.chats || [];
+
+        const chatIndex = chats.findIndex((c) => c.chatId === chatId);
+
+        if (chatIndex !== -1) {
+          chats[chatIndex].isArchived = true;
+          chats[chatIndex].archivedAt = Date.now();
+          await userChatsRef.update({ chats });
+          socket.emit("chat-archived-success", { chatId });
+        }
+      }
+    } catch (error) {
+      console.error("Error archiving chat:", error);
+      socket.emit("error", { message: "Failed to archive chat" });
+    }
+  });
+
+  socket.on("unarchive-chat", async (data) => {
+    try {
+      const userId = socket.userId;
+      const { chatId } = data;
+
+      const userChatsRef = db.collection("userchats").doc(userId);
+      const userChatsDoc = await userChatsRef.get();
+
+      if (userChatsDoc.exists) {
+        const userChatsData = userChatsDoc.data();
+        const chats = userChatsData.chats || [];
+
+        const chatIndex = chats.findIndex((c) => c.chatId === chatId);
+
+        if (chatIndex !== -1) {
+          delete chats[chatIndex].isArchived;
+          delete chats[chatIndex].archivedAt;
+          await userChatsRef.update({ chats });
+          socket.emit("chat-unarchived-success", { chatId });
+        }
+      }
+    } catch (error) {
+      console.error("Error unarchiving chat:", error);
+      socket.emit("error", { message: "Failed to unarchive chat" });
+    }
+  });
 };
