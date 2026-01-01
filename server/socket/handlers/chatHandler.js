@@ -331,39 +331,39 @@ module.exports = (io, socket) => {
   // Mark snap as viewed
   socket.on("view-snap", async (data) => {
     try {
+      const userId = socket.userId || socket.user?.uid;
       const { chatId, messageId } = data;
 
-      const chatDoc = await db.collection("chats").doc(chatId).get();
-      if (!chatDoc.exists) {
-        socket.emit("error", { message: "Chat not found" });
+      if (!chatId || !messageId) {
+        socket.emit("error", { message: "Missing info" });
         return;
       }
 
-      const chatData = chatDoc.data();
-      const messages = chatData.messages || [];
-      const messageIndex = messages.findIndex((m) => m.id === messageId);
+      const messageRef = db
+        .collection("chats")
+        .doc(chatId)
+        .collection("messages")
+        .doc(messageId);
 
-      if (messageIndex === -1) {
+      const messageDoc = await messageRef.get();
+
+      if (!messageDoc.exists) {
         socket.emit("error", { message: "Message not found" });
         return;
       }
 
-      const message = messages[messageIndex];
-      const viewedBy = message.viewedBy || [];
+      const messageData = messageDoc.data();
+      const viewedBy = messageData.viewedBy || [];
 
       if (!viewedBy.includes(userId)) {
-        messages[messageIndex] = {
-          ...message,
-          viewedBy: [...viewedBy, userId],
-        };
-
-        await db.collection("chats").doc(chatId).update({ messages });
-
-        // Broadcast update
+        await messageRef.update({
+          viewedBy: FieldValue.arrayUnion(userId),
+        });
+        const newViewedBy = [...viewedBy, userId];
         io.to(`chat:${chatId}`).emit("snap-viewed", {
           chatId,
           messageId,
-          viewedBy: messages[messageIndex].viewedBy,
+          viewedBy: newViewedBy,
         });
       }
     } catch (error) {
@@ -387,7 +387,7 @@ module.exports = (io, socket) => {
         messageId,
         updatedMessage: {
           id: messageId,
-          text: `${userDisplayName || "Ai đó"} đã thu hồi một tin nhắn`,
+          text: `Tin nhắn đã được thu hồi`,
           type: "unsent",
           img: null,
           reactions: {},

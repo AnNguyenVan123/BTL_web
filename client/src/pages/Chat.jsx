@@ -13,7 +13,12 @@ import {
   orderBy,
   getDocs,
 } from "firebase/firestore";
-import { ref, uploadString, getDownloadURL } from "firebase/storage";
+import {
+  ref,
+  uploadString,
+  getDownloadURL,
+  uploadBytes,
+} from "firebase/storage";
 import { v4 as uuidv4 } from "uuid";
 import { websocketService } from "../lib/websocket";
 
@@ -26,6 +31,7 @@ import TypingIndicator from "../components/pages/chat/main/TypingIndicator";
 import CallMessage from "../components/pages/chat/main/CallMessage";
 import ChatInput from "../components/pages/chat/ChatInput";
 import MessageBubble from "../components/pages/chat/main/MessageBubble";
+import FileMessage from "../components/pages/chat/main/FileMessage";
 import { friendService } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 
@@ -127,14 +133,47 @@ export default function Chat() {
     }
   };
 
-  const handleSendFile = (downloadURL) => {
-    if (!selectedChatId || !downloadURL) return;
-    websocketService.sendMessage(
-      selectedChatId,
-      downloadURL,
-      "file",
-      downloadURL
-    );
+  const handleSendFile = async (file) => {
+    if (!selectedChatId || !file) return;
+    let groupMembers = [];
+    if (chatMetadata?.type === "group" && chatMetadata?.members) {
+      groupMembers = chatMetadata.members;
+    }
+    const tempId = uuidv4();
+    const tempMessage = {
+      id: tempId,
+      senderId: user.uid,
+      text: file.name,
+      img: null,
+      type: "file",
+      createdAt: Date.now(),
+      isUploading: true,
+    };
+
+    setMessages((prev) => [...prev, tempMessage]);
+    setTimeout(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }, 100);
+
+    try {
+      const storageRef = ref(storage, `chat_files/${tempId}_${file.name}`);
+      const snapshot = await uploadBytes(storageRef, file);
+      const downloadURL = await getDownloadURL(snapshot.ref);
+
+      websocketService.sendMessage(
+        selectedChatId,
+        downloadURL,
+        "file",
+        downloadURL,
+        receiver?.uid,
+        groupMembers
+      );
+      setMessages((prev) => prev.filter((m) => m.id !== tempId));
+    } catch (error) {
+      console.error("Upload error:", error);
+      messageApi.error("Upload failed");
+      setMessages((prev) => prev.filter((m) => m.id !== tempId));
+    }
   };
 
   const handleDeleteMessage = (m) => {
@@ -245,7 +284,7 @@ export default function Chat() {
           return [...prev, data.message];
         });
         setTimeout(() => {
-          messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+          messagesEndRef.current?.scrollIntoView({ behavior: "auto" });
         }, 100);
       }
     });
@@ -311,7 +350,7 @@ export default function Chat() {
 
   useEffect(() => {
     if (messages.length > prevMessagesLength.current) {
-      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+      messagesEndRef.current?.scrollIntoView({ behavior: "auto" });
     }
 
     prevMessagesLength.current = messages.length;
@@ -404,6 +443,36 @@ export default function Chat() {
 
     websocketService.onRelationShipUdate(handleRelationshipUpdate);
   }, [receiver?.uid]);
+
+  useEffect(() => {
+    const handleMessageDeleted = (data) => {
+      const { chatId, messageId, updatedMessage } = data;
+      if (chatId === selectedChatId) {
+        setMessages((prev) =>
+          prev.map((msg) => {
+            if (msg.id === messageId) {
+              if (updatedMessage) {
+                return { ...msg, ...updatedMessage };
+              }
+              return {
+                ...msg,
+                text: "Tin nhắn đã được thu hồi",
+                type: "unsent",
+                img: null,
+                file: null,
+                reactions: {},
+              };
+            }
+            return msg;
+          })
+        );
+      }
+    };
+    const unsubscribe = websocketService.onMessageDeleted(handleMessageDeleted);
+    return () => {
+      unsubscribe();
+    };
+  }, [selectedChatId]);
 
   return (
     <>
@@ -513,22 +582,11 @@ export default function Chat() {
                                     isOwner={isOwner}
                                   />
                                 ) : m.type === "file" ? (
-                                  <a
-                                    href={m.img || m.text}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    download
-                                    className="flex items-center gap-2 px-3 py-2 bg-gray-200 dark:bg-gray-700 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition"
-                                  >
-                                    <span className="text-sm font-semibold truncate max-w-[200px]">
-                                      {(m.img || m.text || "")
-                                        .split("/")
-                                        .pop() || "File"}
-                                    </span>
-                                    <span className="text-xs text-blue-600 underline">
-                                      Download
-                                    </span>
-                                  </a>
+                                  <FileMessage
+                                    url={m.img || m.text}
+                                    isOwner={isOwner}
+                                    isUploading={m.isUploading}
+                                  />
                                 ) : m.type === "snap" ? (
                                   <div className="flex flex-col gap-1">
                                     {isViewedByMe ? (
@@ -594,7 +652,7 @@ export default function Chat() {
                                     size="small"
                                     onClick={() => handleDeleteMessage(m)}
                                   >
-                                    Xóa
+                                    Thu hồi
                                   </Button>
                                 }
                                 trigger="click"

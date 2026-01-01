@@ -7,6 +7,10 @@ module.exports = {
     if (blockCache.has(userId)) return;
 
     try {
+      if (!userId || typeof userId !== "string") {
+        console.warn("[BlockCache] Skipping load for invalid userId:", userId);
+        return;
+      }
       const userDoc = await db.collection("users").doc(userId).get();
       const blockedList = userDoc.data()?.blocked || [];
       blockCache.set(userId, new Set(blockedList));
@@ -18,6 +22,9 @@ module.exports = {
   },
 
   checkBlockedStatus: async (senderId, receiverId) => {
+    if (!senderId || !receiverId) {
+      return false;
+    }
     if (!blockCache.has(senderId)) {
       await module.exports.loadUserBlockList(senderId);
     }
