@@ -247,6 +247,20 @@ class WebSocketService {
     return () => this.socket?.off("user-status", handler);
   }
 
+  requestOnlineUsers() {
+    this._waitForConnection(() => {
+      this.socket.emit("req-online-users");
+    });
+  }
+
+  onGetOnlineUsers(callback) {
+    const handler = (data) => callback(data);
+    this._waitForConnection(() => {
+      this.socket.on("get-users", handler);
+    });
+    return () => this.socket?.off("get-users", handler);
+  }
+
   onSnapViewed(callback) {
     if (!this.socket) return () => {};
     const handler = (data) => callback(data);

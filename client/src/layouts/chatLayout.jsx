@@ -45,7 +45,22 @@ export default function ChatLayout() {
   }, []);
 
   useEffect(() => {
-    const unsubscribeStatus = websocketService.onUserStatus((data) => {
+    const unsubscribeGetUsers = websocketService.onGetOnlineUsers((data) => {
+      console.log(data);
+      const initialStatusMap = {};
+      data.forEach((u) => {
+        initialStatusMap[u.userId] = {
+          isOnline: true,
+          lastActive: u.lastActive || Date.now(),
+        };
+      });
+      setUserStatuses((prev) => ({
+        ...prev,
+        ...initialStatusMap,
+      }));
+    });
+
+    const unsubscribeStatusChange = websocketService.onUserStatus((data) => {
       setUserStatuses((prev) => ({
         ...prev,
         [data.userId]: {
@@ -55,8 +70,13 @@ export default function ChatLayout() {
       }));
     });
 
+    if (user?.uid) {
+      websocketService.requestOnlineUsers();
+    }
+
     return () => {
-      unsubscribeStatus();
+      unsubscribeGetUsers();
+      unsubscribeStatusChange();
     };
   }, [user]);
 
@@ -85,7 +105,7 @@ export default function ChatLayout() {
   }, [user, selectedChatId, setSelectedChatId, setReceiver]);
 
   const getUserStatus = (uid) => {
-    return userStatuses[uid] || null;
+    return userStatuses[uid] || { isOnline: false, lastActive: null };
   };
 
   return (

@@ -1,5 +1,5 @@
 const authMiddleware = require("./middleware");
-const { activeRooms, userSockets } = require("./store");
+const { activeRooms, userSockets, onlineUsers } = require("./store");
 const { db } = require("../functions/src/config/firebase");
 
 const registerUserHandlers = require("./handlers/userHandler");
@@ -25,6 +25,27 @@ module.exports = (io) => {
       isOnline: true,
     });
 
+    onlineUsers.set(userId, {
+      socketId: socket.id,
+      lastActive: Date.now(),
+    });
+
+    const activeUsersList = Array.from(onlineUsers.keys()).map((uid) => ({
+      userId: uid,
+      isOnline: true,
+      lastActive: onlineUsers.get(uid).lastActive,
+    }));
+
+    socket.on("req-online-users", () => {
+      const activeUsersList = Array.from(onlineUsers.keys()).map((uid) => ({
+        userId: uid,
+        isOnline: true,
+        lastActive: onlineUsers.get(uid).lastActive,
+      }));
+
+      socket.emit("get-users", activeUsersList);
+    });
+
     db.collection("users")
       .doc(userId)
       .update({
@@ -35,7 +56,7 @@ module.exports = (io) => {
     // Join user's personal room for notifications
     socket.join(`user:${userId}`);
 
-    registerUserHandlers(io, socket, userSockets, activeRooms);
+    registerUserHandlers(io, socket, userSockets, activeRooms, onlineUsers);
     registerChatHandlers(io, socket);
     registerCallHandlers(io, socket, activeRooms);
     registerWebRTCHandlers(io, socket, userSockets);

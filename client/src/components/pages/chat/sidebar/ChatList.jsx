@@ -69,6 +69,7 @@ export default function ChatList() {
               photoURL: data.groupPhoto || "/default-avatar.png",
             },
             isGroup: true,
+            members: data.members || [],
           };
         }
       } else if (receiverId) {
@@ -117,8 +118,18 @@ export default function ChatList() {
           };
 
           if (item.type === "group") {
+            let groupData = {};
+            try {
+              const groupDocSnap = await getDoc(doc(db, "chats", item.chatId));
+              if (groupDocSnap.exists()) {
+                groupData = groupDocSnap.data();
+              }
+            } catch (e) {
+              console.error("Error fetching group details", e);
+            }
             return {
               ...itemWithTime,
+              members: groupData.members || [],
               receiver: {
                 uid: item.chatId,
                 displayName: item.displayName || item.groupName || "Group Chat",

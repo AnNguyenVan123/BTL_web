@@ -33,14 +33,26 @@ export default function Header({ setClose, isInterrupted, receiver }) {
   const [targetToRemove, setTargetToRemove] = useState(null);
   const { getUserStatus } = useContext(ChatContext);
 
-  const realtimeStatus = getUserStatus(receiver?.uid);
+  let isOnline = false;
+  let lastActive = null;
 
-  const isOnline = realtimeStatus
-    ? realtimeStatus.isOnline
-    : receiver?.isOnline || false;
-  const lastActive = realtimeStatus
-    ? realtimeStatus.lastActive
-    : receiver?.lastActive || null;
+  if (receiver?.isGroup) {
+    if (memberIds && Array.isArray(memberIds)) {
+      isOnline = memberIds.some((uid) => {
+        if (uid === user?.uid) return false;
+        const status = getUserStatus(uid);
+        return status?.isOnline === true;
+      });
+    }
+  } else {
+    const realtimeStatus = getUserStatus(receiver?.uid);
+    isOnline = realtimeStatus
+      ? realtimeStatus.isOnline
+      : receiver?.isOnline || false;
+    lastActive = realtimeStatus
+      ? realtimeStatus.lastActive
+      : receiver?.lastActive || null;
+  }
 
   const showMembersModal = () => {
     setIsModalOpen(receiver?.isGroup);

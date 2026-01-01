@@ -46,11 +46,22 @@ export default function UserChat({ receiver, chat, isGroup, isArchived }) {
 
   const isSeen = chat?.isSeen === false ? false : true;
   const hasUnreadMessage = !isLastMessageFromMe && !isSeen;
-  const realtimeStatus = getUserStatus(receiver?.uid);
-  const isOnline = realtimeStatus
-    ? realtimeStatus.isOnline
-    : receiver?.isOnline || false;
+  let isOnline = false;
 
+  if (isGroup) {
+    if (chat?.members && Array.isArray(chat.members)) {
+      isOnline = chat.members.some((memberId) => {
+        if (memberId === user?.uid) return false;
+        const status = getUserStatus(memberId);
+        return status?.isOnline === true;
+      });
+    }
+  } else {
+    const realtimeStatus = getUserStatus(receiver?.uid);
+    isOnline = realtimeStatus
+      ? realtimeStatus.isOnline
+      : receiver?.isOnline || false;
+  }
   const timestamp = chat?.updatedAt || chat?.updateAt;
   const formattedTime = formatTime(timestamp);
 
@@ -119,7 +130,7 @@ export default function UserChat({ receiver, chat, isGroup, isArchived }) {
             />
           </div>
 
-          {!isGroup && isOnline && (
+          {isOnline && (
             <div className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 border-2 border-[#272727] rounded-full"></div>
           )}
         </div>
