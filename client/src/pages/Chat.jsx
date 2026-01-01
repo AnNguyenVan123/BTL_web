@@ -5,7 +5,14 @@ import { ChatContext } from "../context/ChatContext";
 import { Avatar, Popover, Button, Image, message } from "antd";
 
 import { storage, db } from "../lib/firebase";
-import { doc, getDoc } from "firebase/firestore";
+import {
+  doc,
+  getDoc,
+  collection,
+  query,
+  orderBy,
+  getDocs,
+} from "firebase/firestore";
 import { ref, uploadString, getDownloadURL } from "firebase/storage";
 import { v4 as uuidv4 } from "uuid";
 import { websocketService } from "../lib/websocket";
@@ -44,11 +51,11 @@ export default function Chat() {
   const [memberDetails, setMemberDetails] = useState({});
   const [openDeleteId, setOpenDeleteId] = useState(null);
   const [typingUsers, setTypingUsers] = useState(new Set());
-  const [isSocketReady, setIsSocketReady] = useState(false);
   const typingTimeoutRef = useRef(null);
 
   const messagesEndRef = useRef(null);
   const messagesContainerRef = useRef(null);
+  const prevMessagesLength = useRef(0);
 
   const isBlockedByMe = user?.blocked?.includes(receiver?.uid);
   const isBlockedByThem = receiver?.blocked?.includes(user?.uid);
@@ -86,12 +93,17 @@ export default function Chat() {
   };
 
   const handleSendMessage = (text) => {
+    let groupMembers = [];
+    if (chatMetadata?.type === "group" && chatMetadata?.members) {
+      groupMembers = chatMetadata.members;
+    }
     websocketService.sendMessage(
       selectedChatId,
       text,
       "text",
       null,
-      receiver?.uid
+      receiver?.uid,
+      groupMembers
     );
   };
 
@@ -125,6 +137,37 @@ export default function Chat() {
     );
   };
 
+  const handleDeleteMessage = (m) => {
+    let groupMembers = [];
+    if (chatMetadata?.type === "group" && chatMetadata?.members) {
+      groupMembers = chatMetadata.members;
+    }
+    websocketService.deleteMessage(
+      selectedChatId,
+      m.id,
+      user?.displayName,
+      receiver?.uid,
+      groupMembers
+    );
+    setMessages((prev) =>
+      prev.map((msg) => {
+        if (msg.id === m.id) {
+          return {
+            ...msg,
+            text: "Tin nhắn đã được thu hồi",
+            type: "unsent",
+            img: null,
+            file: null,
+            reactions: {},
+            updatedAt: Date.now(),
+          };
+        }
+        return msg;
+      })
+    );
+    setOpenDeleteId(null);
+  };
+
   const handleTyping = () => {
     if (websocketService.isConnected) {
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
@@ -143,9 +186,6 @@ export default function Chat() {
         window.__markChatAsSeenOptimistic(selectedChatId);
       }
 
-      if (!websocketService.isConnected) {
-        await websocketService.connect();
-      }
       websocketService.markChatAsSeen(selectedChatId);
     }
   };
@@ -170,12 +210,25 @@ export default function Chat() {
 
         if (chatSnap.exists()) {
           const data = chatSnap.data();
-          setMessages(data.messages || []);
           setChatMetadata(data);
         } else {
-          setMessages([]);
           setChatMetadata(null);
+          setMessages([]);
+          return;
         }
+
+        const messagesRef = collection(db, "chats", selectedChatId, "messages");
+
+        const q = query(messagesRef, orderBy("createdAt", "asc"));
+
+        const querySnapshot = await getDocs(q);
+
+        const msgs = [];
+        querySnapshot.forEach((doc) => {
+          msgs.push({ id: doc.id, ...doc.data() });
+        });
+
+        setMessages(msgs);
       } catch (error) {
         console.error("Error loading chat data:", error);
       }
@@ -196,16 +249,6 @@ export default function Chat() {
         }, 100);
       }
     });
-
-    const unsubscribeMessageDeleted = websocketService.onMessageDeleted(
-      (data) => {
-        if (data.chatId === currentChatId) {
-          setMessages((prev) =>
-            prev.filter((msg) => msg.id !== data.messageId)
-          );
-        }
-      }
-    );
 
     const unsubscribeSnapViewed = websocketService.onSnapViewed((data) => {
       if (data.chatId === currentChatId) {
@@ -239,10 +282,6 @@ export default function Chat() {
 
     const setupWebSocket = async () => {
       try {
-        if (!websocketService.isConnected) {
-          await websocketService.connect();
-        }
-        setIsSocketReady(true);
         websocketService.joinChat(currentChatId);
       } catch (error) {
         console.error("Failed to setup WebSocket:", error);
@@ -253,7 +292,6 @@ export default function Chat() {
 
     return () => {
       unsubscribeNewMessage();
-      if (unsubscribeMessageDeleted) unsubscribeMessageDeleted();
       unsubscribeSnapViewed();
       unsubscribeError();
       unsubscribeReaction();
@@ -272,12 +310,12 @@ export default function Chat() {
   }, [selectedChatId]);
 
   useEffect(() => {
-    if (messages.length > 0) {
-      setTimeout(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: "auto" });
-      }, 200);
+    if (messages.length > prevMessagesLength.current) {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }
-  }, [messages.length]);
+
+    prevMessagesLength.current = messages.length;
+  }, [messages]);
 
   useEffect(() => {
     if (!chatMetadata || !selectedChatId) return;
@@ -331,7 +369,7 @@ export default function Chat() {
 
   // UseEffect typing status
   useEffect(() => {
-    if (!isSocketReady || !selectedChatId) return;
+    if (!selectedChatId) return;
     const cleanupTyping = websocketService.onTypingStatus((data) => {
       if (data.chatId !== selectedChatId) return;
       setTypingUsers((prev) => {
@@ -342,7 +380,7 @@ export default function Chat() {
       });
     });
     return () => cleanupTyping();
-  }, [selectedChatId, isSocketReady]);
+  }, [selectedChatId]);
 
   return (
     <>
@@ -401,6 +439,7 @@ export default function Chat() {
                         const isViewedByMe =
                           m.viewedBy && m.viewedBy.includes(user.uid);
                         const isCallMessage = m.type === "call";
+                        const isUnsent = m.type === "unsent";
 
                         return (
                           <div
@@ -440,7 +479,11 @@ export default function Chat() {
                                       }`
                                 }`}
                               >
-                                {m.type === "call" || m.type === "call_log" ? (
+                                {isUnsent ? (
+                                  <span className="text-gray-400 italic text-sm select-none">
+                                    Tin nhắn đã được thu hồi
+                                  </span>
+                                ) : m.type === "call" ? (
                                   <CallMessage
                                     key={m.id || i}
                                     message={m}
@@ -519,20 +562,14 @@ export default function Chat() {
                             </div>
 
                             {/* NÚT XÓA */}
-                            {isOwner && m.id && (
+                            {isOwner && m.id && !isUnsent && (
                               <Popover
                                 content={
                                   <Button
                                     type="text"
                                     danger
                                     size="small"
-                                    onClick={() => {
-                                      websocketService.deleteMessage(
-                                        selectedChatId,
-                                        m.id
-                                      );
-                                      setOpenDeleteId(null);
-                                    }}
+                                    onClick={() => handleDeleteMessage(m)}
                                   >
                                     Xóa
                                   </Button>

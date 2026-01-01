@@ -70,11 +70,6 @@ export default function Header({ setClose, isInterrupted, receiver }) {
     };
 
     try {
-      if (!websocketService.isConnected) {
-        await websocketService.connect();
-        await new Promise((resolve) => setTimeout(resolve, 200));
-      }
-
       if (isGroup) {
         let membersToCall = [];
 

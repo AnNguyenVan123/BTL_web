@@ -64,15 +64,11 @@ export default function UserChat({ receiver, chat, isGroup }) {
             window.__markChatAsSeenOptimistic(chat?.chatId);
           }
 
-          // Then send to server
-          if (!websocketService.isConnected) {
-            await websocketService.connect();
-          }
           websocketService.markChatAsSeen(chat?.chatId);
         }
       }}
     >
-      <div className="flex gap-3 flex-1 min-w-0">
+      <div title={lastMessage} className="flex gap-3 flex-1 min-w-0">
         <div className="relative shrink-0">
           <div className="w-12 h-12 rounded-full flex items-center justify-center bg-amber-200 overflow-hidden">
             <img

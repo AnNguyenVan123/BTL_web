@@ -65,12 +65,17 @@ export function AuthProvider({ children }) {
       setLoading(false);
       return;
     }
+    let unsubscribeFirestore = null;
 
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      // setUser(currentUser);
+    const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
       if (currentUser) {
         const userRef = doc(db, "users", currentUser.uid);
-        const unsubscribeFirestore = onSnapshot(userRef, (docSnap) => {
+
+        if (unsubscribeFirestore) {
+          unsubscribeFirestore();
+        }
+
+        unsubscribeFirestore = onSnapshot(userRef, (docSnap) => {
           if (docSnap.exists()) {
             setUser({
               ...currentUser,
@@ -81,13 +86,20 @@ export function AuthProvider({ children }) {
           }
           setLoading(false);
         });
-        return () => {
+      } else {
+        if (unsubscribeFirestore) {
           unsubscribeFirestore();
-        };
+          unsubscribeFirestore = null;
+        }
+        setUser(null);
+        setLoading(false);
       }
-      setLoading(false);
     });
-    return () => unsubscribe();
+
+    return () => {
+      if (unsubscribeFirestore) unsubscribeFirestore();
+      unsubscribeAuth();
+    };
   }, []);
 
   // Đăng nhập bằng Google

@@ -3,6 +3,7 @@ import "./chat.css";
 import { useEffect, useRef, useState } from "react";
 import { Outlet } from "react-router-dom";
 import { CloseOutlined, MenuOutlined } from "@ant-design/icons";
+import { Modal } from "antd";
 
 import { ChatContext } from "../context/ChatContext";
 import { websocketService } from "../lib/websocket";
@@ -42,12 +43,8 @@ export default function ChatLayout() {
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  // Tìm đến đoạn useEffect xử lý user-status và thay thế bằng đoạn này:
-
   useEffect(() => {
-    if (!user) return;
-
-    const handleStatusUpdate = (data) => {
+    const unsubscribeStatus = websocketService.onUserStatus((data) => {
       setUserStatuses((prev) => ({
         ...prev,
         [data.userId]: {
@@ -55,24 +52,36 @@ export default function ChatLayout() {
           lastActive: data.lastActive,
         },
       }));
-    };
-
-    const setupSocket = async () => {
-      if (!websocketService.isConnected) {
-        await websocketService.connect();
-      }
-
-      if (websocketService.socket) {
-        websocketService.socket.on("user-status", handleStatusUpdate);
-      }
-    };
-
-    setupSocket();
+    });
 
     return () => {
-      websocketService.socket?.off("user-status", handleStatusUpdate);
+      unsubscribeStatus();
     };
   }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+    const unsubscribeRemoved = websocketService.onChatRemoved((data) => {
+      const { chatId, groupName } = data;
+      if (selectedChatId === chatId) {
+        setSelectedChatId(null);
+        setReceiver(null);
+        setClose(true);
+        Modal.warning({
+          title: "Thông báo",
+          content: `Bạn đã bị mời ra khỏi nhóm "${
+            groupName || "này"
+          }" (hoặc nhóm đã bị giải tán).`,
+          centered: true,
+          okText: "Đã hiểu",
+        });
+      }
+    });
+
+    return () => {
+      unsubscribeRemoved();
+    };
+  }, [user, selectedChatId, setSelectedChatId, setReceiver]);
 
   const getUserStatus = (uid) => {
     return userStatuses[uid] || null;
