@@ -3,6 +3,7 @@ const { updateLastMessageBackground } = require("../helpers/updateLastMessage");
 
 module.exports.createGroup = async (req, res) => {
   const { currentUserId, selectedUsers, groupName } = req.body;
+  const io = req.app.get("socketio");
 
   if (!selectedUsers || selectedUsers.length === 0) {
     return res.status(400).json({ error: "Cần ít nhất 1 thành viên" });
@@ -53,6 +54,24 @@ module.exports.createGroup = async (req, res) => {
     });
 
     await batch.commit();
+
+    if (io) {
+      uniqueMemberIds.forEach((memberId) => {
+        io.to(`user:${memberId}`).emit("update-sidebar", {
+          chatId: newChatRef.id,
+          lastMessage: "Nhóm đã được tạo",
+          updatedAt: Date.now(),
+          lastSenderId: currentUserId,
+          isSeen: memberId === currentUserId,
+          receiverId: newChatRef.id,
+          type: "group",
+          isGroup: true,
+          groupName: groupName || "New Group",
+          groupPhoto: "https://cdn-icons-png.flaticon.com/512/166/166258.png",
+          members: uniqueMemberIds,
+        });
+      });
+    }
 
     return res.status(200).json({
       success: true,
