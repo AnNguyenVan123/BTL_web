@@ -22,6 +22,7 @@ export default function ChatLayout() {
   const [showNewChat, setShowNewChat] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
+  const [totalUnread, setTotalUnread] = useState(0);
   const lastIsMobile = useRef(null);
 
   useEffect(() => {
@@ -104,6 +105,8 @@ export default function ChatLayout() {
         setSidebarOpen,
         isMobile,
         getUserStatus,
+        totalUnread,
+        setTotalUnread,
       }}
     >
       <div className="chat-layout relative h-screen grid grid-cols-1 md:grid-cols-[280px_1fr] lg:grid-cols-[340px_1fr] overflow-hidden bg-transparent">

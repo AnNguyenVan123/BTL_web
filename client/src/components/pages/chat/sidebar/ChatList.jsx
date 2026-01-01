@@ -1,15 +1,17 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useContext } from "react";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "../../../../lib/firebase";
 import UserChat from "./User";
 import { useAuth } from "../../../../context/AuthContext";
 import { websocketService } from "../../../../lib/websocket";
+import { ChatContext } from "../../../../context/ChatContext";
 
 import ArchivedChats from "./ArchivedChats";
 
 export default function ChatList() {
   const { user } = useAuth();
   const [chats, setChats] = useState([]);
+  const { setTotalUnread } = useContext(ChatContext);
   const [showArchivedList, setShowArchivedList] = useState(false);
   const userCacheRef = useRef(new Map());
   const optimisticUpdatesRef = useRef(new Map());
@@ -344,6 +346,15 @@ export default function ChatList() {
       unsubUnarchived();
     };
   }, []);
+
+  useEffect(() => {
+    if (!user?.uid || !chats) return;
+    const unreadCount = chats.filter(
+      (chat) => !chat.isSeen && chat.lastSenderId !== user.uid
+    ).length;
+
+    setTotalUnread(unreadCount);
+  }, [chats, user?.uid, setTotalUnread]);
 
   if (showArchivedList) {
     return (
