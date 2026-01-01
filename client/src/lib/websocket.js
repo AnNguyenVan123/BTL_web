@@ -335,6 +335,16 @@ class WebSocketService {
     return () => this.socket.off("receive-reaction-update", handler);
   }
 
+  // ========== Relationship ===========
+  onRelationShipUdate(callback) {
+    if (!this.socket) return () => {};
+    const handler = (data) => callback(data);
+    this._waitForConnection(() => {
+      this.socket.on("relationship-updated", handler);
+    });
+    return () => this.socket.off("relationship-updated", handler);
+  }
+
   // ========== WEBRTC METHODS ==========
 
   joinVideoRoom(roomId, profile = {}) {

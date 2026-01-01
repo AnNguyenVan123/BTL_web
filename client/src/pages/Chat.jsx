@@ -58,7 +58,7 @@ export default function Chat() {
   const prevMessagesLength = useRef(0);
 
   const isBlockedByMe = user?.blocked?.includes(receiver?.uid);
-  const isBlockedByThem = receiver?.blocked?.includes(user?.uid);
+  const [isBlockedByThem, setIsBlockedByThem] = useState(false);
   const isInterrupted = isBlockedByMe || isBlockedByThem;
 
   const getChatInfo = () => {
@@ -381,6 +381,29 @@ export default function Chat() {
     });
     return () => cleanupTyping();
   }, [selectedChatId]);
+
+  useEffect(() => {
+    if (receiver && user) {
+      const isBlocked = receiver.blocked?.includes(user.uid) || false;
+      setIsBlockedByThem(isBlocked);
+    }
+  }, [receiver, user]);
+
+  useEffect(() => {
+    const handleRelationshipUpdate = (data) => {
+      if (data.byUser === receiver?.uid) {
+        if (data.type === "blocked") {
+          setIsBlockedByThem(true);
+          message.error("Bạn đã bị người dùng này chặn.");
+        } else if (data.type === "unblocked") {
+          setIsBlockedByThem(false);
+          message.success("Bạn đã được bỏ chặn.");
+        }
+      }
+    };
+
+    websocketService.onRelationShipUdate(handleRelationshipUpdate);
+  }, [receiver?.uid]);
 
   return (
     <>

@@ -1,8 +1,6 @@
 const crypto = require("crypto");
 const { db, FieldValue } = require("../../functions/src/config/firebase");
-const {
-  updateLastMessageBackground,
-} = require("../../functions/src/helpers/updateLastMessage");
+const BlockCache = require("../../cache/BlockCache");
 
 module.exports = (io, socket) => {
   const userId = socket.userId;
@@ -125,9 +123,19 @@ module.exports = (io, socket) => {
   });
 
   // Send message
-  socket.on("send-message", (data) => {
+  socket.on("send-message", async (data) => {
     try {
       const { chatId, text, type = "text", img, receiverId, members } = data;
+      const senderId = socket.userId;
+      const isBlocked = await BlockCache.checkBlockedStatus(
+        senderId,
+        receiverId
+      );
+
+      if (isBlocked) {
+        socket.emit("error", { message: "Không thể gửi tin nhắn (bị chặn)." });
+        return;
+      }
       if (!chatId || !text) {
         console.error("Missing chatId or text in send-message");
         socket.emit("error", { message: "Missing chatId or text" });
