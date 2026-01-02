@@ -270,6 +270,14 @@ class WebSocketService {
     return () => this.socket.off("snap-viewed", handler);
   }
 
+  onMessageUpdated(callback) {
+    const handler = (data) => callback(data);
+    this._waitForConnection(() => {
+      this.socket?.on("message-updated", handler);
+    });
+    return () => this.socket?.off("message-updated", handler);
+  }
+
   onJoinedChat(callback) {
     if (!this.socket) return () => {};
     const handler = (data) => callback(data);

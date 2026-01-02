@@ -1,6 +1,27 @@
 const crypto = require("crypto");
-const { db, FieldValue } = require("../../functions/src/config/firebase");
+const {
+  admin,
+  db,
+  FieldValue,
+} = require("../../functions/src/config/firebase");
 const BlockCache = require("../../cache/BlockCache");
+
+const deleteImageFromStorage = async (fileUrl) => {
+  if (!fileUrl) return;
+  try {
+    const urlObj = new URL(fileUrl);
+    const pathName = urlObj.pathname;
+    const indexOfO = pathName.indexOf("/o/");
+    if (indexOfO === -1) return;
+    const encodedPath = pathName.substring(indexOfO + 3);
+    const filePath = decodeURIComponent(encodedPath);
+
+    await admin.storage().bucket().file(filePath).delete();
+    console.log(`[Storage] Deleted snap: ${filePath}`);
+  } catch (error) {
+    console.error("[Storage] Error deleting file:", error.message);
+  }
+};
 
 module.exports = (io, socket) => {
   const userId = socket.userId;
@@ -151,7 +172,7 @@ module.exports = (io, socket) => {
         text: type === "snap" ? "Sent a Snap" : text,
         img: img || null,
         type: type,
-        viewedBy: [],
+        viewedBy: [senderId],
         createdAt: Date.now(),
         reactions: {},
       };
@@ -331,41 +352,62 @@ module.exports = (io, socket) => {
   // Mark snap as viewed
   socket.on("view-snap", async (data) => {
     try {
-      const userId = socket.userId || socket.user?.uid;
       const { chatId, messageId } = data;
+      if (!chatId || !messageId) return;
 
-      if (!chatId || !messageId) {
-        socket.emit("error", { message: "Missing info" });
-        return;
-      }
+      const chatRef = db.collection("chats").doc(chatId);
+      const messageRef = chatRef.collection("messages").doc(messageId);
 
-      const messageRef = db
-        .collection("chats")
-        .doc(chatId)
-        .collection("messages")
-        .doc(messageId);
+      await db.runTransaction(async (t) => {
+        const chatDoc = await t.get(chatRef);
+        const messageDoc = await t.get(messageRef);
 
-      const messageDoc = await messageRef.get();
+        if (!chatDoc.exists || !messageDoc.exists) return;
 
-      if (!messageDoc.exists) {
-        socket.emit("error", { message: "Message not found" });
-        return;
-      }
+        const chatData = chatDoc.data();
+        const messageData = messageDoc.data();
+        const viewedBy = messageData.viewedBy || [];
 
-      const messageData = messageDoc.data();
-      const viewedBy = messageData.viewedBy || [];
-
-      if (!viewedBy.includes(userId)) {
-        await messageRef.update({
-          viewedBy: FieldValue.arrayUnion(userId),
-        });
+        if (viewedBy.includes(userId)) return;
         const newViewedBy = [...viewedBy, userId];
-        io.to(`chat:${chatId}`).emit("snap-viewed", {
-          chatId,
-          messageId,
-          viewedBy: newViewedBy,
-        });
-      }
+        const groupMembers = chatData.members || [];
+
+        const isEveryoneViewed = groupMembers.every((memberId) =>
+          newViewedBy.includes(memberId)
+        );
+
+        if (isEveryoneViewed) {
+          console.log(`[Snap] Message ${messageId} viewed by all. Deleting...`);
+          deleteImageFromStorage(messageData.img);
+          t.update(messageRef, {
+            viewedBy: newViewedBy,
+            type: "expired",
+            img: null,
+            file: null,
+          });
+
+          io.to(`chat:${chatId}`).emit("message-updated", {
+            chatId,
+            messageId,
+            updatedMessage: {
+              ...messageData,
+              viewedBy: newViewedBy,
+              type: "expired",
+              img: null,
+            },
+          });
+        } else {
+          t.update(messageRef, {
+            viewedBy: newViewedBy,
+          });
+
+          io.to(`chat:${chatId}`).emit("snap-viewed", {
+            chatId,
+            messageId,
+            viewedBy: newViewedBy,
+          });
+        }
+      });
     } catch (error) {
       console.error("Error viewing snap:", error);
       socket.emit("error", { message: "Failed to mark snap as viewed" });

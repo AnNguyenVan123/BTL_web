@@ -114,7 +114,18 @@ export default function Chat() {
   };
 
   const sendSnapMessage = (url) => {
-    websocketService.sendMessage(selectedChatId, "Sent a Snap", "snap", url);
+    let groupMembers = [];
+    if (chatMetadata?.type === "group" && chatMetadata?.members) {
+      groupMembers = chatMetadata.members;
+    }
+    websocketService.sendMessage(
+      selectedChatId,
+      "Sent a Snap",
+      "snap",
+      url,
+      receiver?.uid,
+      groupMembers
+    );
   };
 
   const handleSendImageFromCamera = async (imageBase64) => {
@@ -468,9 +479,21 @@ export default function Chat() {
         );
       }
     };
+
+    const handleMessageUpdated = (data) => {
+      if (data.chatId === selectedChatId) {
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === data.messageId ? { ...msg, ...data.updatedMessage } : msg
+          )
+        );
+      }
+    };
     const unsubscribe = websocketService.onMessageDeleted(handleMessageDeleted);
+    const unsubUpdate = websocketService.onMessageUpdated(handleMessageUpdated);
     return () => {
       unsubscribe();
+      unsubUpdate();
     };
   }, [selectedChatId]);
 
@@ -587,19 +610,16 @@ export default function Chat() {
                                     isOwner={isOwner}
                                     isUploading={m.isUploading}
                                   />
-                                ) : m.type === "snap" ? (
+                                ) : m.type === "snap" ||
+                                  m.type === "expired" ? (
                                   <div className="flex flex-col gap-1">
-                                    {isViewedByMe ? (
-                                      <div
-                                        className={`flex items-center gap-2 px-3 py-2 rounded border ${
-                                          isOwner
-                                            ? "border-blue-500/30 bg-blue-900/20"
-                                            : "border-gray-600 bg-gray-800"
-                                        }`}
-                                      >
-                                        <span className="text-lg">🔥</span>
-                                        <span className="text-gray-400 text-sm italic">
-                                          {isOwner ? "Opened" : "Expired"}
+                                    {m.type === "expired" || !m.img ? (
+                                      <div className="flex items-center gap-2 px-3 py-2 rounded border border-gray-700 bg-gray-800/60">
+                                        <span className="text-lg grayscale">
+                                          ⌛
+                                        </span>
+                                        <span className="text-gray-500 text-sm italic">
+                                          Expired
                                         </span>
                                       </div>
                                     ) : (
@@ -617,13 +637,28 @@ export default function Chat() {
                                             </div>
                                           </div>
                                         ) : (
-                                          <div
-                                            onClick={() => handleOpenSnap(m)}
-                                            className="cursor-pointer font-bold py-2 px-4 rounded transition-all flex items-center gap-2 shadow-lg bg-linear-to-r from-red-500 to-pink-500 hover:from-red-600 hover:to-pink-600 text-white animate-pulse"
-                                          >
-                                            <span>📸</span>
-                                            <span>Tap to View Snap</span>
-                                          </div>
+                                          <>
+                                            {isViewedByMe ? (
+                                              <div className="flex items-center gap-2 px-3 py-2 rounded border border-gray-600 bg-gray-800">
+                                                <span className="text-lg">
+                                                  🔥
+                                                </span>
+                                                <span className="text-gray-400 text-sm italic">
+                                                  Opened
+                                                </span>
+                                              </div>
+                                            ) : (
+                                              <div
+                                                onClick={() =>
+                                                  handleOpenSnap(m)
+                                                }
+                                                className="cursor-pointer font-bold py-2 px-4 rounded transition-all flex items-center gap-2 shadow-lg bg-linear-to-r from-red-500 to-pink-500 hover:from-red-600 hover:to-pink-600 text-white animate-pulse"
+                                              >
+                                                <span>📸</span>
+                                                <span>Tap to View Snap</span>
+                                              </div>
+                                            )}
+                                          </>
                                         )}
                                       </>
                                     )}
