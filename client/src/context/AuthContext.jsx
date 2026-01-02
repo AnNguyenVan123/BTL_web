@@ -114,12 +114,12 @@ export function AuthProvider({ children }) {
   };
 
   // Đăng ký bằng email
-  const signupWithEmail = async (email, password) => {
+  const signupWithEmail = async (email, password, displayName) => {
     if (!auth) {
       throw new Error("Firebase is not configured");
     }
     const result = await createUserWithEmailAndPassword(auth, email, password);
-    await syncUserData(result.user);
+    await syncUserData({ ...result.user, displayName });
     setUser(result.user);
     return result.user;
   };

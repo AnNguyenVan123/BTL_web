@@ -10,6 +10,7 @@ import {
 import { Avatar, Badge } from "antd";
 
 import { ChatContext } from "../../../../context/ChatContext";
+import { useAuth } from "../../../../context/AuthContext";
 
 export default function Header() {
   const {
@@ -19,6 +20,10 @@ export default function Header() {
     setShowNewChat,
     totalUnread,
   } = useContext(ChatContext);
+
+  const { user } = useAuth();
+  const friendRequestCount = user?.friendRequests?.length || 0;
+
   return (
     <>
       <div className="flex justify-around items-center max-h-[61px] h-1/6 border border-b-gray-700">
@@ -31,7 +36,9 @@ export default function Header() {
             className="rounded-full bg-[#424242] w-8 h-8 grid place-content-center cursor-pointer"
             onClick={() => setToggleAddUser(!toggleAddUser)}
           >
-            <UserAddOutlined style={{ color: "white", fontSize: 18 }} />
+            <Badge count={friendRequestCount} size="small" offset={[2, -4]}>
+              <UserAddOutlined style={{ color: "white", fontSize: 18 }} />
+            </Badge>
           </div>
           <div
             onClick={() => setShowNewChat(!showNewChat)}
