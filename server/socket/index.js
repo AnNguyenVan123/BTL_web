@@ -1,6 +1,6 @@
 const authMiddleware = require("./middleware");
 const { activeRooms, userSockets, onlineUsers } = require("./store");
-const { db } = require("../functions/src/config/firebase");
+const { db, FieldValue } = require("../functions/src/config/firebase");
 
 const registerUserHandlers = require("./handlers/userHandler");
 const registerChatHandlers = require("./handlers/chatHandler");
@@ -30,12 +30,6 @@ module.exports = (io) => {
       lastActive: Date.now(),
     });
 
-    const activeUsersList = Array.from(onlineUsers.keys()).map((uid) => ({
-      userId: uid,
-      isOnline: true,
-      lastActive: onlineUsers.get(uid).lastActive,
-    }));
-
     socket.on("req-online-users", () => {
       const activeUsersList = Array.from(onlineUsers.keys()).map((uid) => ({
         userId: uid,
@@ -46,11 +40,16 @@ module.exports = (io) => {
       socket.emit("get-users", activeUsersList);
     });
 
-    db.collection("users")
+    await db
+      .collection("users")
       .doc(userId)
-      .update({
-        isOnline: true,
-      })
+      .set(
+        {
+          isOnline: true,
+          lastLogin: FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+      )
       .catch((e) => console.error("Error update online:", e));
 
     // Join user's personal room for notifications

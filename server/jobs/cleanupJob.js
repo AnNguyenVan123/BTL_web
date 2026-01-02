@@ -22,7 +22,7 @@ const getFilePathFromUrl = (downloadUrl) => {
 
 const initCronJob = () => {
   cron.schedule(
-    "* * * * *",
+    "0 3 * * *",
     async () => {
       console.log("[CRON] Bắt đầu quét dọn Snaps quá hạn 24h...");
 

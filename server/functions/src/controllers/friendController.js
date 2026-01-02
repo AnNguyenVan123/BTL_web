@@ -75,6 +75,7 @@ exports.acceptFriendRequest = async (req, res) => {
   try {
     const myUid = req.user.uid;
     const partnerUid = req.body.targetUid;
+    const io = req.app.get("socketio");
 
     if (!partnerUid) {
       return res.status(400).json({ error: "targetUid is required" });
@@ -84,6 +85,7 @@ exports.acceptFriendRequest = async (req, res) => {
     const partnerRef = db.collection("users").doc(partnerUid);
     const myUserChatRef = db.collection("userchats").doc(myUid);
     const partnerUserChatRef = db.collection("userchats").doc(partnerUid);
+    let socketPayload = null;
 
     await db.runTransaction(async (t) => {
       const myDoc = await t.get(myRef);
@@ -96,6 +98,7 @@ exports.acceptFriendRequest = async (req, res) => {
       }
 
       const myData = myDoc.data();
+      const partnerData = partnerDoc.data();
 
       const requestObject = (myData.friendRequests || []).find(
         (req) => req.uid === partnerUid
@@ -172,7 +175,41 @@ exports.acceptFriendRequest = async (req, res) => {
         sentRequests: FieldValue.arrayRemove(myUid),
         friends: FieldValue.arrayUnion(myUid),
       });
+
+      socketPayload = {
+        chatId: finalChatId,
+        lastMessage: "",
+        updatedAt: Date.now(),
+        senderId: myUid,
+        senderInfo: {
+          displayName: myData.displayName,
+          photoURL: myData.photoURL,
+        },
+        partnerInfo: {
+          displayName: partnerData.displayName,
+          photoURL: partnerData.photoURL,
+        },
+      };
     });
+
+    if (io && socketPayload) {
+      io.to(`user:${myUid}`).emit("update-sidebar", {
+        ...socketPayload,
+        receiverId: partnerUid,
+        displayName: socketPayload.partnerInfo.displayName,
+        photoURL: socketPayload.partnerInfo.photoURL,
+        isSeen: true,
+      });
+
+      // Gửi cho người kia
+      io.to(`user:${partnerUid}`).emit("update-sidebar", {
+        ...socketPayload,
+        isSeen: false,
+        receiverId: myUid,
+        displayName: socketPayload.senderInfo.displayName,
+        photoURL: socketPayload.senderInfo.photoURL,
+      });
+    }
 
     return res.status(200).json({ success: true });
   } catch (error) {
